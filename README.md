@@ -5,12 +5,31 @@
 
 ## 启动
 
+本机日常运行使用 conda 环境 `lerobot`。该环境中的 `lerobot` 以 editable 方式指向仓库内的 `third_party/lerobot`：
+
 ```bash
 ./run.sh          # 即 conda env `lerobot` 的 python -m collect_studio
 # 打开 http://localhost:8600
 ```
 
 首次在终端启动时 macOS 会弹「终端想访问摄像头」→ 允许(仅需一次)。
+
+新机器可使用 [uv](https://docs.astral.sh/uv/) 复现 Python 环境：
+
+```bash
+uv sync
+uv run python -m collect_studio
+```
+
+视频录制还需要系统依赖 ffmpeg：
+
+```bash
+brew install ffmpeg
+```
+
+## Vendored LeRobot
+
+`third_party/lerobot` 通过 git subtree 收录自 Seeed-Projects 的 LeRobot fork，固定于 commit `0f39248`（基于 Hugging Face LeRobot 0.4.4 系列）。源码按 Apache-2.0 授权，许可证随 subtree 保留在 [`third_party/lerobot/LICENSE`](third_party/lerobot/LICENSE)。
 
 ## 日常采集流程
 
