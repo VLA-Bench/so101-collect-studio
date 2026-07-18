@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SO101 Collect Studio · 交互稿</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131824; --panel2:#1a2130; --line:#232c3f;
+    --txt:#dce3f0; --dim:#8593ab; --faint:#5a6880;
+    --accent:#4cc2ff; --green:#3ddc84; --red:#ff5560; --amber:#ffb454;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font:14px/1.6 -apple-system,"PingFang SC","Helvetica Neue",sans-serif;overflow:hidden;display:flex;flex-direction:column}
+  kbd{font:11px var(--mono);background:#222b3d;border:1px solid #33405a;border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:#cdd8ec;white-space:nowrap}
+  button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 14px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#04121d;font-weight:600}
+  button.primary:hover{filter:brightness(1.1);color:#04121d}
+  button.danger{background:#3a1219;border-color:#7c2530;color:#ff8a92}
+  button.danger:hover{border-color:var(--red);color:var(--red)}
+  button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+  input[type=text],input[type=number]{background:#0d1220;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:7px 10px;font:inherit;width:100%}
+  input:focus{outline:none;border-color:var(--accent)}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:18px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+  .logo{font-weight:700;font-size:15px;letter-spacing:.5px}
+  .logo em{color:var(--accent);font-style:normal}
+  nav{display:flex;gap:4px}
+  nav .tab{padding:6px 14px;border-radius:8px;border:1px solid transparent;cursor:pointer;color:var(--dim);font-size:13px}
+  nav .tab:hover{color:var(--txt)}
+  nav .tab.active{background:var(--panel2);border-color:var(--line);color:var(--accent)}
+  nav .tab .n{display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;background:#26324a;font-size:11px;margin-right:6px;color:var(--txt)}
+  nav .tab.done .n{background:var(--green);color:#04180c}
+  .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#4a556e;flex:none}
+  .dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .dot.bad{background:var(--red)}
+  #estop{background:#3a1219;border:1px solid #7c2530;color:#ff8a92;font-weight:700;border-radius:8px;padding:6px 14px}
+  #estop:hover{background:#57121d;color:#fff}
+
+  main{flex:1;min-height:0;position:relative}
+  .step{position:absolute;inset:0;display:none;overflow:auto;padding:22px 26px}
+  .step.active{display:block}
+  .step h2{font-size:17px;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- step1 ---------- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1060px}
+  .arm-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .arm-head b{font-size:15px}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:4px 10px;font-size:13px}
+  .kv .k{color:var(--dim)}
+  .kv .v{font-family:var(--mono);font-size:12.5px}
+  .wide{grid-column:1/-1}
+  .steprow{display:flex;gap:12px;align-items:center;margin-top:14px}
+  .progress{height:6px;background:#0d1220;border-radius:3px;overflow:hidden;flex:1}
+  .progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+  table.joints{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px}
+  table.joints th{color:var(--dim);font-weight:500;text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}
+  table.joints td{padding:4px 8px;border-bottom:1px solid #1a2233;font-family:var(--mono);font-size:12px}
+  .ok-ico{color:var(--green)}
+  .warn-note{margin-top:14px;font-size:12.5px;color:var(--amber);background:#2a2113;border:1px solid #4a3a1a;border-radius:8px;padding:8px 12px}
+  .next-bar{max-width:1060px;margin-top:18px;display:flex;justify-content:space-between;align-items:center}
+
+  /* ---------- step2 ---------- */
+  .cams{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1160px}
+  .cam-card canvas{width:100%;aspect-ratio:16/10;border-radius:8px;background:#000;display:block}
+  .cam-card .nm{margin:10px 0 2px;font-weight:600}
+  .cam-card .uid{font-family:var(--mono);font-size:11px;color:var(--faint);margin-bottom:10px;color:var(--dim)}
+  .roles{display:flex;gap:8px}
+  .roles button{flex:1;padding:6px 4px;font-size:13px}
+  .roles button.sel{background:var(--accent);border-color:var(--accent);color:#04121d;font-weight:600}
+
+  /* ---------- step3 layout ---------- */
+  #step3{display:none;padding:0}
+  #step3.active{display:flex}
+  aside{width:252px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+  aside section{padding:14px 16px;border-bottom:1px solid var(--line)}
+  aside h3{font-size:12px;color:var(--dim);font-weight:600;letter-spacing:.6px;margin-bottom:10px;text-transform:uppercase}
+  .sess .kv{grid-template-columns:56px 1fr;font-size:12px}
+  .task{border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:8px;cursor:pointer;transition:.15s}
+  .task:hover{border-color:#3a4a68}
+  .task.sel{border-color:var(--accent);background:#12233299}
+  .task .prompt{font-size:13px;line-height:1.4}
+  .task .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .task.sel .meta b{color:var(--accent)}
+  .addtask{display:flex;gap:6px;margin-top:4px}
+  .addtask button{padding:7px 10px;flex:none}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+  .stat{background:var(--panel2);border-radius:8px;padding:8px 4px}
+  .stat b{display:block;font-size:19px;font-family:var(--mono)}
+  .stat span{font-size:11px;color:var(--dim)}
+  .stat.g b{color:var(--green)} .stat.r b{color:var(--red)} .stat.a b{color:var(--amber)}
+
+  .deck{flex:1;min-width:0;display:flex;flex-direction:column;padding:14px 18px 10px}
+  .deck-top{display:flex;align-items:center;gap:14px;margin-bottom:10px;flex:none}
+  .pageind{font-family:var(--mono);font-size:14px}
+  .pageind b{color:var(--accent);font-size:16px}
+  .chip{font-size:11px;border-radius:20px;padding:2px 10px;border:1px solid var(--line);color:var(--dim)}
+  .chip.live{border-color:var(--red);color:var(--red);animation:blink 1.4s infinite}
+  .chip.saved{border-color:var(--green);color:var(--green)}
+  .chip.trash{border-color:#66708a;color:#66708a;text-decoration:line-through}
+  @keyframes blink{50%{opacity:.45}}
+  .deck-top .meta{color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+  .deck-top .spacer{flex:1}
+
+  .viewport{flex:1;min-height:0;perspective:1400px;position:relative}
+  .page{position:absolute;inset:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;transform-origin:left center;box-shadow:0 8px 40px #0008}
+  .page.flip-r{animation:flipR .22s ease-out}
+  .page.flip-l{animation:flipL .22s ease-out}
+  @keyframes flipR{from{transform:rotateY(9deg) translateX(70px);opacity:.15}to{transform:none;opacity:1}}
+  @keyframes flipL{from{transform:rotateY(-9deg) translateX(-70px);opacity:.15}to{transform:none;opacity:1}}
+  .feeds{flex:1;min-height:0;display:grid;grid-template-columns:1.45fr 1fr;grid-template-rows:1fr 1fr;gap:10px;position:relative}
+  .feed{position:relative;border-radius:9px;overflow:hidden;background:#000;min-height:0}
+  .feed.wrist{grid-row:1/3}
+  .feed canvas{width:100%;height:100%;object-fit:cover;display:block}
+  .feed .tag{position:absolute;left:8px;bottom:6px;font:11px var(--mono);color:#c6ffd9;background:#000a;padding:1px 8px;border-radius:4px;letter-spacing:.5px}
+  .rec-ov{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;background:#000a;border-radius:6px;padding:4px 10px}
+  .rec-ov .rdot{width:9px;height:9px;border-radius:50%;background:#555}
+  .rec-ov.rec .rdot{background:var(--red);box-shadow:0 0 8px var(--red);animation:blink 1s infinite}
+  .rec-ov.paused .rdot{background:var(--amber)}
+  .prompt-ov{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#000b;border:1px solid #ffffff22;border-radius:20px;padding:4px 16px;font-size:13px;white-space:nowrap}
+  .replay-wm{position:absolute;top:10px;right:12px;font:12px var(--mono);color:#ffffff77;background:#0009;padding:2px 10px;border-radius:4px;letter-spacing:2px}
+
+  .ep-info{flex:none;display:flex;align-items:center;gap:16px;padding:9px 6px 2px;font-size:12.5px;color:var(--dim)}
+  .ep-info .mono{color:var(--txt)}
+  .scrub{flex:1;display:flex;align-items:center;gap:10px}
+  .scrub input{flex:1;accent-color:var(--accent)}
+  .ctrl-bar{flex:none;display:flex;align-items:center;gap:12px;padding:10px 6px 2px}
+  #recbtn{width:150px;font-weight:700}
+  #recbtn.rec{background:var(--red);border-color:var(--red);color:#fff}
+  #recbtn.paused{background:var(--amber);border-color:var(--amber);color:#241500}
+  .timer{font:600 20px var(--mono);width:96px}
+  .frames{font:12px var(--mono);color:var(--dim);width:110px}
+  .ctrl-bar .spacer{flex:1}
+  .hint{font-size:12px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap}
+  .hint span{white-space:nowrap}
+
+  .navbtn{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:38px;height:66px;border-radius:10px;background:#131824cc;border:1px solid var(--line);font-size:19px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+  .navbtn:hover{border-color:var(--accent)}
+  .navbtn.prev{left:-6px}.navbtn.next{right:-6px}
+
+  .strip{flex:none;display:flex;align-items:center;gap:5px;padding:12px 2px 4px;overflow-x:auto}
+  .cell{width:30px;height:22px;border-radius:5px;border:1.5px solid #33405a;background:#1b2436;cursor:pointer;flex:none;position:relative;transition:.12s}
+  .cell:hover{border-color:var(--accent)}
+  .cell.saved{background:#12351f;border-color:#2b7a45}
+  .cell.trash{background:#1c202b;border-color:#3a4152;opacity:.5}
+  .cell.cur{outline:2px solid var(--accent);outline-offset:1px}
+  .cell.live{width:52px;border-color:var(--red);color:var(--red);font:10px var(--mono);display:flex;align-items:center;justify-content:center;background:#2a1218}
+  .strip .lbl{font:10px var(--mono);color:var(--faint);color:var(--dim);margin-right:4px;flex:none}
+
+  /* ---------- step4 ---------- */
+  .exp-grid{display:grid;grid-template-columns:340px 1fr;gap:16px;max-width:1160px}
+  .pick{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:13px}
+  .pick input{width:auto}
+  .pick .cnt{margin-left:auto;font:11px var(--mono);color:var(--dim)}
+  pre.json{background:#0d1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12px/1.7 var(--mono);color:#9fd0ff;overflow:auto}
+  .check li{list-style:none;font-size:13px;padding:3px 0}
+  .check li::before{content:"✓";color:var(--green);margin-right:8px;font-weight:700}
+
+  /* ---------- overlays ---------- */
+  .modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(2px)}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;min-width:380px;max-width:560px;box-shadow:0 20px 60px #000c}
+  .modal h3{margin-bottom:14px;font-size:15px}
+  .keys{display:grid;grid-template-columns:auto 1fr;gap:9px 18px;font-size:13px;align-items:center}
+  .keys .k{text-align:right}
+  #toasts{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:9px 16px;font-size:13px;box-shadow:0 6px 24px #0009;animation:tin .2s ease-out;max-width:420px}
+  .toast.g{border-left-color:var(--green)} .toast.r{border-left-color:var(--red)} .toast.a{border-left-color:var(--amber)}
+  @keyframes tin{from{transform:translateY(10px);opacity:0}}
+  .toast.out{opacity:0;transition:.4s}
+  #flash{position:fixed;inset:0;background:var(--red);opacity:0;pointer-events:none;z-index:70;transition:opacity .5s}
+
+  footer{flex:none;display:flex;align-items:center;gap:16px;padding:6px 18px;background:var(--panel);border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+  footer .demo-tag{color:var(--amber)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SO101 <em>Collect Studio</em></div>
+  <nav>
+    <div class="tab active" data-step="1"><span class="n">1</span>设备与校准</div>
+    <div class="tab" data-step="2"><span class="n">2</span>相机绑定</div>
+    <div class="tab" data-step="3"><span class="n">3</span>采集台</div>
+    <div class="tab" data-step="4"><span class="n">4</span>导出 v2.1</div>
+  </nav>
+  <div class="hdr-right">
+    <span class="badge"><i class="dot" id="d-leader"></i>主动臂</span>
+    <span class="badge"><i class="dot" id="d-follower"></i>从动臂</span>
+    <span class="badge"><i class="dot" id="d-cams"></i>相机 ×3</span>
+    <button id="estop" title="快捷键 E">⏻ 急停</button>
+  </div>
+</header>
+
+<main>
+  <!-- ========== STEP 1 ========== -->
+  <div class="step active" id="step1">
+    <h2>设备与校准</h2>
+    <div class="sub">按 USB 序列号识别两臂,校准 = 复制已有文件 + 只读体检。<b style="color:var(--amber)">本应用没有舵机重校准入口。</b></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="arm-head"><i class="dot" id="a-leader"></i><b>主动臂 leader</b><span class="chip" id="c-leader">扫描中…</span></div>
+        <div class="kv">
+          <span class="k">串口</span><span class="v" id="p-leader">—</span>
+          <span class="k">序列号</span><span class="v" id="s-leader">—</span>
+          <span class="k">校准 ID</span><span class="v">my_awesome_leader_arm</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="arm-head"><i class="dot" id="a-follower"></i><b>从动臂 follower</b><span class="chip" id="c-follower">扫描中…</span></div>
+        <div class="kv">
+          <span class="k">串口</span><span class="v" id="p-follower">—</span>
+          <span class="k">序列号</span><span class="v" id="s-follower">—</span>
+          <span class="k">校准 ID</span><span class="v">my_awesome_follower_arm</span>
+        </div>
+      </div>
+      <div class="card wide">
+        <b>① 摆动识别</b>
+        <div class="sub" style="margin:4px 0 0">两臂控制板型号相同,首次使用需要确认谁是主动臂:点击开始后<b>用手晃动主动臂</b>,系统检测哪个总线的关节位置在变化。</div>
+        <div class="steprow">
+          <button id="wiggle-btn" class="primary">开始摆动识别</button>
+          <div class="progress"><i id="wiggle-bar"></i></div>
+          <span id="wiggle-msg" style="color:var(--dim);font-size:13px;min-width:260px">未开始</span>
+        </div>
+      </div>
+      <div class="card wide">
+        <b>② 一键导入校准</b>
+        <div class="sub" style="margin:4px 0 0">将内置备份复制到 <span class="mono" style="font-size:12px">~/.cache/huggingface/lerobot/calibration/…</span>,随后连接总线做只读体检(当前位置是否落在标定行程内)。</div>
+        <div class="steprow">
+          <button id="calib-btn" class="primary" disabled>导入校准并体检</button>
+          <div class="progress"><i id="calib-bar"></i></div>
+          <span id="calib-msg" style="color:var(--dim);font-size:13px;min-width:260px">等待摆动识别完成</span>
+        </div>
+        <div id="joints-wrap" style="display:none">
+          <table class="joints">
+            <thead><tr><th>关节</th><th>homing_offset</th><th>range</th><th>当前位置</th><th>体检</th></tr></thead>
+            <tbody id="joints-body"></tbody>
+          </table>
+          <div class="warn-note">✋ 体检异常时请人工检查接线与关节摆位 —— 不提供、也不要执行舵机重校准。</div>
+        </div>
+      </div>
+    </div>
+    <div class="next-bar">
+      <span style="color:var(--dim);font-size:12.5px">演示提示:也可以直接点上方页签跳到任意步骤</span>
+      <button class="primary" id="to2" disabled>下一步:相机绑定 →</button>
+    </div>
+  </div>
+
+  <!-- ========== STEP 2 ========== -->
+  <div class="step" id="step2">
+    <h2>相机绑定</h2>
+    <div class="sub">所有相机实时出画,点选角色即可绑定 —— 不再需要命令行拍照猜编号。绑定按硬件 uniqueID 持久化,拔插换口不漂移。</div>
+    <div class="cams" id="cams"></div>
+    <div class="next-bar" style="max-width:1160px">
+      <span id="cam-status" style="color:var(--dim);font-size:13px">已绑定 0 / 3 个角色</span>
+      <button class="primary" id="to3" disabled>保存绑定,进入采集台 →</button>
+    </div>
+  </div>
+
+  <!-- ========== STEP 3 ========== -->
+  <div class="step" id="step3">
+    <aside>
+      <section class="sess">
+        <h3>当前批次 Session</h3>
+        <div class="kv">
+          <span class="k">批次</span><span class="v" id="sess-name">2026-07-17_1530</span>
+          <span class="k">存储</span><span class="v">~/so101_data/staging/</span>
+          <span class="k">主时钟</span><span class="v">30 Hz</span>
+        </div>
+      </section>
+      <section>
+        <h3>任务(<kbd>T</kbd> 轮换)</h3>
+        <div id="tasklist"></div>
+        <div class="addtask">
+          <input type="text" id="newtask" placeholder="新任务提示词…">
+          <button id="addtask-btn">＋</button>
+        </div>
+      </section>
+      <section>
+        <h3>本批统计</h3>
+        <div class="stats">
+          <div class="stat g"><b id="st-saved">0</b><span>已保存</span></div>
+          <div class="stat r"><b id="st-trash">0</b><span>已标废</span></div>
+          <div class="stat a"><b id="st-min">0</b><span>分钟</span></div>
+        </div>
+      </section>
+      <section style="border-bottom:none">
+        <h3>快捷键</h3>
+        <div class="keys" style="font-size:12px;gap:6px 12px">
+          <span class="k"><kbd>Space</kbd></span><span>开始 / 暂停</span>
+          <span class="k"><kbd>Enter</kbd></span><span>保存本集</span>
+          <span class="k"><kbd>⌫</kbd></span><span>舍弃 / 标废</span>
+          <span class="k"><kbd>←</kbd><kbd>→</kbd></span><span>翻页</span>
+          <span class="k"><kbd>G</kbd></span><span>跳转</span>
+          <span class="k"><kbd>?</kbd></span><span>全部快捷键</span>
+        </div>
+      </section>
+    </aside>
+
+    <div class="deck">
+      <div class="deck-top">
+        <span class="pageind" id="pageind"></span>
+        <span class="chip" id="pagechip"></span>
+        <span class="meta" id="pagemeta"></span>
+        <span class="spacer"></span>
+        <button id="trash-btn" style="display:none">标废 <kbd style="margin-left:4px">⌫</kbd></button>
+        <button id="golive-btn" style="display:none">回到 LIVE <kbd style="margin-left:4px">End</kbd></button>
+      </div>
+
+      <div class="viewport">
+        <button class="navbtn prev" id="nav-prev" title="上一页 (←)">‹</button>
+        <button class="navbtn next" id="nav-next" title="下一页 (→)">›</button>
+        <div class="page" id="page">
+          <div class="feeds">
+            <div class="feed wrist"><canvas id="cv-w" width="640" height="480"></canvas><span class="tag">WRIST · 640×480@30</span></div>
+            <div class="feed"><canvas id="cv-l" width="640" height="360"></canvas><span class="tag">LEFT_REAR · 1280×720</span></div>
+            <div class="feed"><canvas id="cv-r" width="640" height="360"></canvas><span class="tag">RIGHT_REAR · 1280×720</span></div>
+            <div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>
+            <div class="replay-wm" id="replay-wm" style="display:none">▶ 回放</div>
+            <div class="prompt-ov" id="prompt-ov"></div>
+          </div>
+          <div class="ep-info" id="scrub-row" style="display:none">
+            <span class="scrub"><span class="mono" id="scrub-t">0.0s</span><input type="range" id="scrub" min="0" max="1000" value="0"><span class="mono" id="scrub-d">0.0s</span></span>
+          </div>
+          <div class="ctrl-bar" id="live-ctrl">
+            <button id="recbtn" class="primary">● 开始录制</button>
+            <span class="timer" id="timer">00:00.0</span>
+            <span class="frames" id="framecnt">0 帧</span>
+            <button id="savebtn" disabled>✓ 保存 <kbd style="margin-left:4px">Enter</kbd></button>
+            <button id="dropbtn" class="danger" disabled>✗ 舍弃 <kbd style="margin-left:4px">⌫</kbd></button>
+            <span class="spacer"></span>
+            <span class="hint"><span><kbd>←</kbd><kbd>→</kbd> 翻页</span><span><kbd>G</kbd> 跳转</span><span><kbd>T</kbd> 换任务</span><span><kbd>?</kbd> 帮助</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="strip" id="strip"></div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 4 ========== -->
+  <div class="step" id="step4">
+    <h2>导出 v2.1 数据集(规划稿)</h2>
+    <div class="sub">从 library 勾选任务/批次自由组合打包;打包是纯读操作,原始 episode 永不修改,可反复导出不同组合。</div>
+    <div class="exp-grid">
+      <div class="card">
+        <b style="display:block;margin-bottom:10px">选择数据</b>
+        <label class="pick"><input type="checkbox" checked>grab_cube / 2026-07-17_1530<span class="cnt" id="exp-cnt1">0 集</span></label>
+        <label class="pick"><input type="checkbox" checked>stack_blocks / 2026-07-17_1602<span class="cnt" id="exp-cnt2">0 集</span></label>
+        <label class="pick"><input type="checkbox">grab_cube / 2026-07-16_1912<span class="cnt">18 集</span></label>
+        <div style="margin:12px 0 6px;font-size:13px;color:var(--dim)">数据集名称</div>
+        <input type="text" value="so101_pick_stack_v21">
+        <button class="primary" style="width:100%;margin-top:12px" id="export-btn">打包为 v2.1 + EEF</button>
+        <ul class="check" style="margin-top:12px" >
+          <li>帧数对齐:parquet 行数 = 视频帧数</li>
+          <li>四元数半球连续性已对齐</li>
+          <li>p<sub>t</sub>+Δp<sub>t</sub> ≈ p<sub>t+1</sub> 回代误差 &lt; 1e-5</li>
+          <li>旧版 LeRobotDataset 冒烟加载通过</li>
+        </ul>
+      </div>
+      <div class="card">
+        <b style="display:block;margin-bottom:10px">输出格式 · info.json 摘要</b>
+<pre class="json">{
+  "codebase_version": "v2.1",
+  "fps": 30,
+  "features": {
+    "observation.state":      { "dtype":"float32", "shape":[6] },
+    "action":                 { "dtype":"float32", "shape":[6] },
+    "observation.state.eef":  { "dtype":"float32", "shape":[7],
+        "names": ["x","y","z","qw","qx","qy","qz"] },   // TCP 绝对位姿(基座系,FK)
+    "action.eef":             { "dtype":"float32", "shape":[7],
+        "names": ["dx","dy","dz","dqw","dqx","dqy","dqz"] }, // 相邻帧增量,末帧=[0,0,0,1,0,0,0]
+    "observation.images.wrist":      { "dtype":"video", "shape":[480,640,3] },
+    "observation.images.left_rear":  { "dtype":"video", "shape":[720,1280,3] },
+    "observation.images.right_rear": { "dtype":"video", "shape":[720,1280,3] }
+  }
+}</pre>
+        <div style="font-size:12.5px;color:var(--dim);margin-top:8px">目录:meta/{info.json, episodes.jsonl, tasks.jsonl, episodes_stats.jsonl} + data/chunk-000/episode_%06d.parquet + videos/chunk-000/&lt;key&gt;/episode_%06d.mp4 · 多任务经 tasks.jsonl + task_index 原生支持</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span class="demo-tag">⚠ 交互稿(demo)</span>
+  <span>画面为 canvas 模拟;真实版本中为 MJPEG 预览流与 mp4 回放,布局与交互不变</span>
+  <span style="margin-left:auto">SO101 Collect Studio · 计划书见同目录 计划书.md</span>
+</footer>
+
+<!-- modals -->
+<div class="modal-bg" id="help-bg"><div class="modal">
+  <h3>快捷键</h3>
+  <div class="keys">
+    <span class="k"><kbd>Space</kbd></span><span>开始录制 / 暂停 / 恢复</span>
+    <span class="k"><kbd>Enter</kbd></span><span>保存当前 episode(晋升入库)</span>
+    <span class="k"><kbd>Backspace</kbd></span><span>录制中:舍弃(删暂存);历史页:标废 / 恢复</span>
+    <span class="k"><kbd>←</kbd> <kbd>→</kbd></span><span>上一页 / 下一页(录制中翻页会先自动暂停)</span>
+    <span class="k"><kbd>Home</kbd> <kbd>End</kbd></span><span>第一集 / 回到 LIVE</span>
+    <span class="k"><kbd>G</kbd></span><span>跳转到指定 episode</span>
+    <span class="k"><kbd>T</kbd></span><span>轮换任务(轮流采集)</span>
+    <span class="k"><kbd>E</kbd></span><span>急停:从动臂断力矩</span>
+    <span class="k"><kbd>?</kbd></span><span>本帮助(Esc 关闭)</span>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="jump-bg"><div class="modal" style="min-width:320px">
+  <h3>跳转到 episode</h3>
+  <input type="number" id="jump-input" placeholder="输入编号,如 3" min="0">
+  <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+    <button onclick="closeModals()">取消</button>
+    <button class="primary" id="jump-go">跳转</button>
+  </div>
+</div></div>
+
+<div id="toasts"></div>
+<div id="flash"></div>
+
+<script>
+/* ================= state ================= */
+const $ = id => document.getElementById(id);
+const state = {
+  step: 1,
+  wiggleDone: false, calibDone: false,
+  camRoles: {},                    // camIdx -> role
+  tasks: [
+    { slug:'grab_cube',    prompt:'Grab the cube',                        count:4 },
+    { slug:'stack_blocks', prompt:'Stack the red block on the blue block', count:2 },
+  ],
+  curTask: 0,
+  episodes: [],                    // {id,taskIdx,frames,dur,status,seed,savedAt}
+  page: 0,                         // 0..episodes.length (== LIVE)
+  rec: 'idle',                     // idle|rec|paused
+  recStart: 0, recAcc: 0,          // accumulated ms
+  epSeq: 6,
+  playbackPos: 0, playing: true, lastTs: performance.now(),
+  liveSeed: Math.random()*100,
+};
+// 预置历史数据:翻书有内容可翻
+(function seed(){
+  const durs=[14.2,11.8,17.5,9.6,15.1,12.9];
+  for(let i=0;i<6;i++) state.episodes.push({
+    id:'episode_'+String(i).padStart(6,'0'), taskIdx: i<4?0:1,
+    dur:durs[i], frames:Math.round(durs[i]*30), status:'saved',
+    seed:i*13.7+3, savedAt:'15:'+String(12+i*3).padStart(2,'0'),
+  });
+  state.page = state.episodes.length; // LIVE
+})();
+
+const ROLES=[['wrist','腕部 wrist'],['left_rear','左后 left_rear'],['right_rear','右后 right_rear']];
+const CAMDEFS=[
+  {name:'USB Camera (index 0)', uid:'0x14200000_05ac_8600'},
+  {name:'USB Camera (index 1)', uid:'0x14210000_1bcf_2c99'},
+  {name:'USB Camera (index 2)', uid:'0x14220000_1bcf_2c9a'},
+];
+
+/* ================= toast / modal ================= */
+function toast(msg, cls=''){
+  const d=document.createElement('div'); d.className='toast '+cls; d.innerHTML=msg;
+  $('toasts').appendChild(d);
+  setTimeout(()=>d.classList.add('out'),2600); setTimeout(()=>d.remove(),3100);
+}
+function closeModals(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+
+/* ================= step nav ================= */
+function gotoStep(n){
+  state.step=n;
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  $('step'+n).classList.add('active');
+  document.querySelectorAll('nav .tab').forEach(t=>t.classList.toggle('active',+t.dataset.step===n));
+  if(n===3) renderDeck();
+  if(n===4){ $('exp-cnt1').textContent=state.tasks[0].count+' 集'; $('exp-cnt2').textContent=state.tasks[1].count+' 集'; }
+}
+document.querySelectorAll('nav .tab').forEach(t=>t.onclick=()=>gotoStep(+t.dataset.step));
+
+/* ================= step1:摆动识别 + 校准 ================= */
+setTimeout(()=>{ // 模拟串口扫描
+  $('p-leader').textContent='/dev/tty.usbmodem5B415328621';
+  $('s-leader').textContent='5B415328621';
+  $('p-follower').textContent='/dev/tty.usbmodem5B415327841';
+  $('s-follower').textContent='5B415327841';
+  ['a-leader','a-follower','d-leader','d-follower'].forEach(i=>$(i).classList.add('ok'));
+  $('c-leader').textContent='已连接'; $('c-follower').textContent='已连接';
+  $('c-leader').classList.add('saved'); $('c-follower').classList.add('saved');
+},700);
+
+$('wiggle-btn').onclick=()=>{
+  if(state.wiggleDone) return;
+  $('wiggle-btn').disabled=true;
+  $('wiggle-msg').textContent='请现在晃动主动臂…';
+  let p=0; const iv=setInterval(()=>{
+    p+=4; $('wiggle-bar').style.width=p+'%';
+    if(p===40) $('wiggle-msg').textContent='检测到 5B41…8621 总线位置变化 ↺';
+    if(p>=100){ clearInterval(iv);
+      state.wiggleDone=true;
+      $('wiggle-msg').innerHTML='<span style="color:var(--green)">✓ 识别完成:5B415328621 = 主动臂,已写入 devices.yaml</span>';
+      $('calib-btn').disabled=false; $('calib-msg').textContent='就绪';
+      toast('摆动识别完成,主/从臂绑定已按序列号持久化','g');
+    }
+  },60);
+};
+
+const JOINTS=[
+  ['shoulder_pan',-1985,'759 – 3491',2131],['shoulder_lift',-47,'843 – 3241',2020],
+  ['elbow_flex',1540,'892 – 3127',2244],['wrist_flex',-1686,'912 – 3216',1930],
+  ['wrist_roll',-1420,'160 – 3925',2047],['gripper',-990,'2029 – 3476',2110],
+];
+$('calib-btn').onclick=()=>{
+  $('calib-btn').disabled=true;
+  $('calib-msg').textContent='复制校准文件 → 连接总线体检…';
+  let p=0; const iv=setInterval(()=>{
+    p+=5; $('calib-bar').style.width=p+'%';
+    if(p>=100){ clearInterval(iv);
+      state.calibDone=true;
+      $('calib-msg').innerHTML='<span style="color:var(--green)">✓ 两臂校准已导入,6/6 关节体检通过</span>';
+      const tb=$('joints-body'); tb.innerHTML='';
+      JOINTS.forEach(j=>{ tb.insertAdjacentHTML('beforeend',
+        `<tr><td>${j[0]}</td><td>${j[1]}</td><td>${j[2]}</td><td>${j[3]}</td><td class="ok-ico">✓ 在行程内</td></tr>`);});
+      $('joints-wrap').style.display='block';
+      $('to2').disabled=false;
+      document.querySelector('[data-step="1"]').classList.add('done');
+      toast('校准导入完成(仅复制文件,未触碰舵机)','g');
+    }
+  },55);
+};
+$('to2').onclick=()=>gotoStep(2);
+
+/* ================= step2:相机绑定 ================= */
+const camCanvases=[];
+(function buildCams(){
+  CAMDEFS.forEach((c,i)=>{
+    const card=document.createElement('div'); card.className='card cam-card';
+    card.innerHTML=`<canvas width="480" height="300"></canvas>
+      <div class="nm">${c.name}</div><div class="uid">uniqueID ${c.uid}</div>
+      <div class="roles">${ROLES.map(r=>`<button data-cam="${i}" data-role="${r[0]}">${r[1]}</button>`).join('')}</div>`;
+    $('cams').appendChild(card);
+    camCanvases.push(card.querySelector('canvas'));
+  });
+  $('cams').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-role]'); if(!b) return;
+    const cam=+b.dataset.cam, role=b.dataset.role;
+    Object.keys(state.camRoles).forEach(k=>{ if(state.camRoles[k]===role) delete state.camRoles[k]; });
+    state.camRoles[cam]=role;
+    document.querySelectorAll('.roles button').forEach(x=>{
+      x.classList.toggle('sel', state.camRoles[+x.dataset.cam]===x.dataset.role);
+    });
+    const n=Object.keys(state.camRoles).length;
+    $('cam-status').textContent=`已绑定 ${n} / 3 个角色`;
+    $('to3').disabled = n<3;
+    if(n===3){ $('d-cams').classList.add('ok'); document.querySelector('[data-step="2"]').classList.add('done'); }
+  });
+})();
+$('to3').onclick=()=>{ toast('相机绑定已按 uniqueID 写入 devices.yaml','g'); gotoStep(3); };
+
+/* ================= 模拟相机画面 ================= */
+function drawScene(cv, t, view, seed, live){
+  const ctx=cv.getContext('2d'), w=cv.width, h=cv.height;
+  const hue = view==='wrist'?210 : view==='left'?160 : 30;
+  const g=ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,`hsl(${hue} 22% 13%)`); g.addColorStop(1,`hsl(${hue} 18% 7%)`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  const deskY=h*0.74;
+  ctx.fillStyle=`hsl(${hue} 14% 17%)`; ctx.fillRect(0,deskY,w,h-deskY);
+  ctx.strokeStyle='#ffffff14'; ctx.beginPath(); ctx.moveTo(0,deskY); ctx.lineTo(w,deskY); ctx.stroke();
+
+  // 机械臂运动学(演示用的假运动)
+  const ph=t*0.9+seed;
+  const a1=-1.05+0.5*Math.sin(ph), a2=1.5+0.45*Math.sin(ph*0.8+1.2), a3=0.7+0.5*Math.sin(ph*1.15+0.4);
+  const mir = view==='right'? -1:1;
+  const bx=w*(view==='wrist'?0.5:(0.5-mir*0.22)), by=deskY+4, L=h*0.24;
+  const p1=[bx+mir*L*Math.cos(a1+Math.PI/2)*0.9, by-L*Math.sin(a1+Math.PI/2)];
+  const p2=[p1[0]+mir*L*0.85*Math.cos(a1+a2), p1[1]-L*0.85*Math.sin(a1+a2)];
+  const p3=[p2[0]+mir*L*0.6*Math.cos(a1+a2+a3-1.5), p2[1]-L*0.6*Math.sin(a1+a2+a3-1.5)];
+  const grasp = Math.sin(ph*0.8+2.1)>0.35;
+  const cube = grasp? [p3[0],p3[1]+7] : [bx+mir*w*0.24+Math.sin(seed*3)*w*0.05, deskY-8];
+
+  ctx.save();
+  if(view==='wrist'){ // 腕部视角:跟随夹爪的近景
+    ctx.translate(w/2,h/2); ctx.scale(2.1,2.1); ctx.rotate(Math.sin(ph*0.7)*0.05);
+    ctx.translate(-p3[0],-p3[1]+6);
+  }
+  // cube
+  ctx.fillStyle='#e05252'; ctx.fillRect(cube[0]-9,cube[1]-9,18,18);
+  ctx.fillStyle='#ffffff22'; ctx.fillRect(cube[0]-9,cube[1]-9,18,5);
+  // arm
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle='#3b4763'; ctx.lineWidth=11;
+  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(...p1); ctx.lineTo(...p2); ctx.stroke();
+  ctx.strokeStyle='#55688f'; ctx.lineWidth=7;
+  ctx.beginPath(); ctx.moveTo(...p2); ctx.lineTo(...p3); ctx.stroke();
+  [ [bx,by],p1,p2 ].forEach(p=>{ ctx.fillStyle='#202a3e'; ctx.beginPath(); ctx.arc(p[0],p[1],6,0,7); ctx.fill(); });
+  // gripper
+  ctx.strokeStyle='#8fa4c8'; ctx.lineWidth=3;
+  const gw=grasp?4:9;
+  ctx.beginPath(); ctx.moveTo(p3[0]-gw,p3[1]); ctx.lineTo(p3[0]-gw,p3[1]+12); ctx.moveTo(p3[0]+gw,p3[1]); ctx.lineTo(p3[0]+gw,p3[1]+12); ctx.stroke();
+  ctx.restore();
+
+  // 相机质感:噪点 + 暗角 + 角标
+  ctx.fillStyle='#ffffff08';
+  for(let i=0;i<26;i++) ctx.fillRect(Math.random()*w,Math.random()*h,1.5,1.5);
+  const v=ctx.createRadialGradient(w/2,h/2,h*0.4,w/2,h/2,h*0.95);
+  v.addColorStop(0,'#0000'); v.addColorStop(1,'#000a'); ctx.fillStyle=v; ctx.fillRect(0,0,w,h);
+  ctx.font='10px Menlo,monospace'; ctx.fillStyle= live?'#7dffab':'#ffd27d';
+  const stamp=(live?'● LIVE ':'▶ PLAY ')+t.toFixed(1)+'s';
+  ctx.fillText(stamp, w-ctx.measureText(stamp).width-8, h-8);
+}
+
+/* ================= step3:deck ================= */
+const liveIdx=()=>state.episodes.length;
+const onLive=()=>state.page===liveIdx();
+
+function fmtT(ms){
+  const s=ms/1000, m=Math.floor(s/60);
+  return String(m).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0')+'.'+Math.floor((s*10)%10);
+}
+function recElapsed(){ return state.recAcc + (state.rec==='rec'? performance.now()-state.recStart:0); }
+
+function renderTasks(){
+  const el=$('tasklist'); el.innerHTML='';
+  state.tasks.forEach((t,i)=>{
+    const d=document.createElement('div'); d.className='task'+(i===state.curTask?' sel':'');
+    d.innerHTML=`<div class="prompt">${t.prompt}</div><div class="meta"><span>${t.slug}</span><b>${t.count} 集</b></div>`;
+    d.onclick=()=>{ state.curTask=i; renderTasks(); renderDeck(); };
+    el.appendChild(d);
+  });
+}
+$('addtask-btn').onclick=()=>{
+  const v=$('newtask').value.trim(); if(!v) return;
+  const slug=v.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')||('task_'+state.tasks.length);
+  state.tasks.push({slug,prompt:v,count:0}); state.curTask=state.tasks.length-1;
+  $('newtask').value=''; renderTasks(); renderDeck();
+  toast('新任务已创建:'+v,'g');
+};
+
+function renderStats(){
+  $('st-saved').textContent=state.episodes.filter(e=>e.status==='saved').length;
+  $('st-trash').textContent=state.episodes.filter(e=>e.status==='trash').length;
+  const mins=state.episodes.reduce((a,e)=>a+(e.status==='saved'?e.dur:0),0)/60;
+  $('st-min').textContent=mins.toFixed(1);
+}
+
+function renderStrip(){
+  const s=$('strip'); s.innerHTML='<span class="lbl">EPISODES</span>';
+  state.episodes.forEach((e,i)=>{
+    const c=document.createElement('div');
+    c.className='cell '+e.status+(state.page===i?' cur':'');
+    c.title=e.id+' · '+state.tasks[e.taskIdx].slug+(e.status==='trash'?' · 已标废':'');
+    c.onclick=()=>flipTo(i);
+    s.appendChild(c);
+  });
+  const lv=document.createElement('div');
+  lv.className='cell live'+(onLive()?' cur':''); lv.textContent='LIVE';
+  lv.onclick=()=>flipTo(liveIdx());
+  s.appendChild(lv);
+}
+
+function renderDeck(){
+  const live=onLive();
+  if(live){
+    $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
+    $('pagechip').className='chip live'; $('pagechip').textContent=state.rec==='idle'?'实时':'录制中';
+    $('pagemeta').textContent='task: '+state.tasks[state.curTask].slug;
+    $('prompt-ov').textContent='“'+state.tasks[state.curTask].prompt+'”';
+    $('scrub-row').style.display='none'; $('live-ctrl').style.display='flex';
+    $('rec-ov').style.display='flex'; $('replay-wm').style.display='none';
+    $('trash-btn').style.display='none'; $('golive-btn').style.display='none';
+  }else{
+    const e=state.episodes[state.page];
+    $('pageind').innerHTML=`<b>${e.id}</b> <span style="color:var(--dim)">· 第 ${state.page+1} / ${liveIdx()+1} 页</span>`;
+    $('pagechip').className='chip '+e.status;
+    $('pagechip').textContent=e.status==='saved'?'已保存':'已标废';
+    $('pagemeta').textContent=`task: ${state.tasks[e.taskIdx].slug} · ${e.dur.toFixed(1)}s · ${e.frames} 帧 · 保存于 ${e.savedAt}`;
+    $('prompt-ov').textContent='“'+state.tasks[e.taskIdx].prompt+'”';
+    $('scrub-row').style.display='flex'; $('live-ctrl').style.display='none';
+    $('rec-ov').style.display='none'; $('replay-wm').style.display='block';
+    $('trash-btn').style.display='inline-block';
+    $('trash-btn').textContent=e.status==='trash'?'♻ 恢复':'🗑 标废';
+    $('golive-btn').style.display='inline-block';
+    $('scrub-d').textContent=e.dur.toFixed(1)+'s';
+  }
+  renderStrip(); renderStats(); renderTasks();
+}
+
+function flipTo(idx, dir){
+  idx=Math.max(0,Math.min(liveIdx(),idx));
+  if(idx===state.page) return;
+  if(state.rec==='rec'){ pauseRec(); toast('翻页已自动暂停录制','a'); }
+  dir = dir ?? (idx>state.page?'r':'l');
+  state.page=idx; state.playbackPos=0; state.playing=true;
+  const pg=$('page');
+  pg.classList.remove('flip-r','flip-l'); void pg.offsetWidth;
+  pg.classList.add(dir==='r'?'flip-r':'flip-l');
+  renderDeck();
+}
+$('nav-prev').onclick=()=>flipTo(state.page-1,'l');
+$('nav-next').onclick=()=>flipTo(state.page+1,'r');
+$('golive-btn').onclick=()=>flipTo(liveIdx(),'r');
+$('trash-btn').onclick=()=>toggleTrash();
+
+function toggleTrash(){
+  if(onLive()) return;
+  const e=state.episodes[state.page];
+  e.status = e.status==='trash'?'saved':'trash';
+  toast(e.status==='trash'? e.id+' 已移入回收站(可恢复)' : e.id+' 已恢复','a');
+  renderDeck();
+}
+
+/* ---- 录制状态机 ---- */
+function setRecUI(){
+  const ov=$('rec-ov'), btn=$('recbtn');
+  ov.className='rec-ov '+(state.rec==='rec'?'rec':state.rec==='paused'?'paused':'');
+  $('rec-txt').textContent = state.rec==='idle'?'待机': state.rec==='rec'?'REC '+fmtT(recElapsed()):'已暂停 '+fmtT(recElapsed());
+  btn.className = state.rec==='rec'?'rec': state.rec==='paused'?'paused':'primary';
+  btn.textContent = state.rec==='idle'?'● 开始录制': state.rec==='rec'?'❚❚ 暂停':'▶ 继续';
+  $('savebtn').disabled = $('dropbtn').disabled = state.rec==='idle';
+}
+function startOrToggleRec(){
+  if(!onLive()) { flipTo(liveIdx(),'r'); }
+  if(state.rec==='idle'){ state.rec='rec'; state.recAcc=0; state.recStart=performance.now(); state.liveSeed=Math.random()*100;
+    toast('开始录制 → staging/episode_'+String(state.epSeq).padStart(6,'0')); }
+  else if(state.rec==='rec'){ pauseRec(); }
+  else { state.rec='rec'; state.recStart=performance.now(); }
+  setRecUI(); renderDeck();
+}
+function pauseRec(){ if(state.rec!=='rec')return; state.recAcc+=performance.now()-state.recStart; state.rec='paused'; setRecUI(); }
+function saveEp(){
+  if(state.rec==='idle') return;
+  const ms=recElapsed(), dur=Math.max(ms/1000,0.6);
+  const e={ id:'episode_'+String(state.epSeq++).padStart(6,'0'), taskIdx:state.curTask,
+    dur, frames:Math.round(dur*30), status:'saved', seed:Math.random()*90,
+    savedAt:new Date().toTimeString().slice(0,5) };
+  state.episodes.push(e); state.tasks[state.curTask].count++;
+  state.rec='idle'; state.recAcc=0; state.page=liveIdx();
+  toast(`✓ ${e.id} 已保存 → library/${state.tasks[e.taskIdx].slug}/(${e.frames} 帧,后台编码 mp4)`,'g');
+  setRecUI(); renderDeck();
+}
+function dropEp(){
+  if(state.rec==='idle') return;
+  state.rec='idle'; state.recAcc=0;
+  toast('✗ 已舍弃,暂存目录已删除(零成本)','r');
+  setRecUI(); renderDeck();
+}
+$('recbtn').onclick=startOrToggleRec;
+$('savebtn').onclick=saveEp;
+$('dropbtn').onclick=dropEp;
+
+/* ---- 急停 ---- */
+function estop(){
+  $('flash').style.opacity=.35; setTimeout(()=>$('flash').style.opacity=0,180);
+  if(state.rec!=='idle') pauseRec();
+  toast('⏻ 急停:从动臂已断力矩(演示)','r');
+}
+$('estop').onclick=estop;
+
+/* ---- 导出 ---- */
+$('export-btn').onclick=()=>toast('演示:真实版将在后台打包 v2.1 并生成校验报告','a');
+
+/* ---- 跳转 / 帮助 ---- */
+$('jump-go').onclick=()=>{ const v=parseInt($('jump-input').value); closeModals();
+  if(!isNaN(v)) flipTo(v); };
+$('jump-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('jump-go').click();} e.stopPropagation(); });
+
+/* ================= 键盘 ================= */
+document.addEventListener('keydown',e=>{
+  if(e.target instanceof Element && e.target.matches('input,textarea')) { if(e.key==='Escape') e.target.blur(); return; }
+  if(e.key==='Escape'){ closeModals(); return; }
+  if(e.key==='?'){ $('help-bg').classList.toggle('open'); return; }
+  if(e.key==='e'||e.key==='E'){ estop(); return; }
+  if(state.step!==3) return;
+  switch(e.key){
+    case ' ': e.preventDefault(); startOrToggleRec(); break;
+    case 'Enter': e.preventDefault(); if(onLive()) saveEp(); break;
+    case 'Backspace': e.preventDefault(); onLive()? dropEp() : toggleTrash(); break;
+    case 'ArrowLeft': e.preventDefault(); flipTo(state.page-1,'l'); break;
+    case 'ArrowRight': e.preventDefault(); flipTo(state.page+1,'r'); break;
+    case 'Home': e.preventDefault(); flipTo(0,'l'); break;
+    case 'End': e.preventDefault(); flipTo(liveIdx(),'r'); break;
+    case 'g': case 'G': $('jump-bg').classList.add('open'); $('jump-input').value=''; setTimeout(()=>$('jump-input').focus(),50); break;
+    case 't': case 'T': state.curTask=(state.curTask+1)%state.tasks.length; renderDeck();
+      toast('当前任务 → '+state.tasks[state.curTask].prompt); break;
+  }
+});
+
+/* ---- 回放进度条 ---- */
+$('scrub').addEventListener('input',e=>{
+  if(onLive()) return;
+  const ep=state.episodes[state.page];
+  state.playbackPos = e.target.value/1000*ep.dur; state.playing=false;
+});
+document.querySelector('.viewport').addEventListener('dblclick',()=>{ if(!onLive()) state.playing=!state.playing; });
+
+/* ================= 主渲染循环 ================= */
+function tick(now){
+  const dt=(now-state.lastTs)/1000; state.lastTs=now;
+  // step2 缩略图
+  if(state.step===2) camCanvases.forEach((cv,i)=>drawScene(cv, now/1000, ['wrist','left','right'][i], i*7+2, true));
+  // step3 deck
+  if(state.step===3){
+    const cw=$('cv-w'), cl=$('cv-l'), cr=$('cv-r');
+    if(onLive()){
+      const t=now/1000;
+      drawScene(cw,t,'wrist',state.liveSeed,true);
+      drawScene(cl,t,'left', state.liveSeed,true);
+      drawScene(cr,t,'right',state.liveSeed,true);
+      if(state.rec==='rec'){
+        $('timer').textContent=fmtT(recElapsed());
+        $('framecnt').textContent=Math.round(recElapsed()/1000*30)+' 帧';
+        $('rec-txt').textContent='REC '+fmtT(recElapsed());
+      } else if(state.rec==='idle'){ $('timer').textContent='00:00.0'; $('framecnt').textContent='0 帧'; }
+    }else{
+      const ep=state.episodes[state.page];
+      if(state.playing){ state.playbackPos+=dt; if(state.playbackPos>ep.dur) state.playbackPos=0; }
+      const t=state.playbackPos;
+      drawScene(cw,t+1,'wrist',ep.seed,false);
+      drawScene(cl,t+1,'left', ep.seed,false);
+      drawScene(cr,t+1,'right',ep.seed,false);
+      $('scrub').value=Math.round(t/ep.dur*1000);
+      $('scrub-t').textContent=t.toFixed(1)+'s';
+    }
+  }
+  requestAnimationFrame(tick);
+}
+renderDeck(); setRecUI();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

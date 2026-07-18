@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SO101 Collect Studio</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131824; --panel2:#1a2130; --line:#232c3f;
+    --txt:#dce3f0; --dim:#8593ab; --accent:#4cc2ff; --green:#3ddc84; --red:#ff5560; --amber:#ffb454;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font:14px/1.6 -apple-system,"PingFang SC","Helvetica Neue",sans-serif;overflow:hidden;display:flex;flex-direction:column}
+  kbd{font:11px var(--mono);background:#222b3d;border:1px solid #33405a;border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:#cdd8ec;white-space:nowrap}
+  button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 14px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#04121d;font-weight:600}
+  button.primary:hover{filter:brightness(1.1);color:#04121d}
+  button.danger{background:#3a1219;border-color:#7c2530;color:#ff8a92}
+  button.danger:hover{border-color:var(--red);color:var(--red)}
+  button.ok{background:#0e2b1a;border-color:#2b7a45;color:#7fe0a4}
+  button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+  input[type=text],input[type=number]{background:#0d1220;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:7px 10px;font:inherit;width:100%}
+  input:focus{outline:none;border-color:var(--accent)}
+
+  header{display:flex;align-items:center;gap:18px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+  .logo{font-weight:700;font-size:15px}
+  .logo em{color:var(--accent);font-style:normal}
+  nav{display:flex;gap:4px}
+  nav .tab{padding:6px 14px;border-radius:8px;border:1px solid transparent;cursor:pointer;color:var(--dim);font-size:13px}
+  nav .tab:hover{color:var(--txt)}
+  nav .tab.active{background:var(--panel2);border-color:var(--line);color:var(--accent)}
+  .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#4a556e;flex:none}
+  .dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .dot.warn{background:var(--amber)}
+  #estop{background:#3a1219;border:1px solid #7c2530;color:#ff8a92;font-weight:700}
+  #estop:hover{background:#57121d;color:#fff}
+
+  main{flex:1;min-height:0;position:relative}
+  .step{position:absolute;inset:0;display:none;overflow:auto;padding:22px 26px}
+  .step.active{display:block}
+  #step3{padding:0}
+  #step3.active{display:flex}
+  .step h2{font-size:17px;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .mono{font-family:var(--mono)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px}
+  .wide{grid-column:1/-1}
+  .arm-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:4px 10px;font-size:13px}
+  .kv .k{color:var(--dim)}
+  .kv .v{font-family:var(--mono);font-size:12.5px}
+  .chip{font-size:11px;border-radius:20px;padding:2px 10px;border:1px solid var(--line);color:var(--dim)}
+  .chip.live{border-color:var(--red);color:var(--red);animation:blink 1.4s infinite}
+  .chip.saved{border-color:var(--green);color:var(--green)}
+  .chip.trash{border-color:#66708a;color:#66708a;text-decoration:line-through}
+  .chip.warn{border-color:var(--amber);color:var(--amber)}
+  @keyframes blink{50%{opacity:.45}}
+  .steprow{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  table.joints{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+  table.joints th{color:var(--dim);font-weight:500;text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}
+  table.joints td{padding:3px 8px;border-bottom:1px solid #1a2233;font-family:var(--mono);font-size:12px}
+  .ok-t{color:var(--green)} .bad-t{color:var(--red)}
+  .warn-note{margin-top:12px;font-size:12.5px;color:var(--amber);background:#2a2113;border:1px solid #4a3a1a;border-radius:8px;padding:8px 12px}
+
+  .cams{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1360px}
+  .cam-card img{width:100%;aspect-ratio:4/3;border-radius:8px;background:#000;display:block;object-fit:cover}
+  .cam-card .nm{margin:10px 0 2px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .cam-card .uid{font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:10px;word-break:break-all}
+  .roles{display:flex;gap:8px}
+  .roles button{flex:1;padding:6px 4px;font-size:13px}
+  .roles button.sel{background:var(--accent);border-color:var(--accent);color:#04121d;font-weight:600}
+  .next-bar{max-width:1360px;margin-top:18px;display:flex;justify-content:space-between;align-items:center}
+
+  aside{width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+  aside section{padding:13px 16px;border-bottom:1px solid var(--line)}
+  aside h3{font-size:12px;color:var(--dim);font-weight:600;letter-spacing:.6px;margin-bottom:9px;text-transform:uppercase}
+  .task{border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:8px;cursor:pointer;transition:.15s}
+  .task:hover{border-color:#3a4a68}
+  .task.sel{border-color:var(--accent);background:#12233299}
+  .task .prompt{font-size:13px;line-height:1.4}
+  .task .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .task.sel .meta b{color:var(--accent)}
+  .addtask{display:flex;gap:6px;margin-top:4px}
+  .addtask button{padding:7px 10px;flex:none}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+  .stat{background:var(--panel2);border-radius:8px;padding:8px 4px}
+  .stat b{display:block;font-size:19px;font-family:var(--mono)}
+  .stat span{font-size:11px;color:var(--dim)}
+  .stat.g b{color:var(--green)} .stat.r b{color:var(--red)} .stat.a b{color:var(--amber)}
+  .keys{display:grid;grid-template-columns:auto 1fr;gap:9px 18px;font-size:13px;align-items:center}
+  .keys .k{text-align:right}
+
+  .deck{flex:1;min-width:0;display:flex;flex-direction:column;padding:14px 18px 10px}
+  .deck-top{display:flex;align-items:center;gap:14px;margin-bottom:10px;flex:none;flex-wrap:wrap}
+  .pageind{font-family:var(--mono);font-size:14px}
+  .pageind b{color:var(--accent);font-size:16px}
+  .deck-top .meta{color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+  .deck-top .spacer{flex:1}
+  .viewport{flex:1;min-height:0;perspective:1400px;position:relative}
+  .page{position:absolute;inset:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;transform-origin:left center;box-shadow:0 8px 40px #0008}
+  .page.flip-r{animation:flipR .22s ease-out}
+  .page.flip-l{animation:flipL .22s ease-out}
+  @keyframes flipR{from{transform:rotateY(9deg) translateX(70px);opacity:.15}to{transform:none;opacity:1}}
+  @keyframes flipL{from{transform:rotateY(-9deg) translateX(-70px);opacity:.15}to{transform:none;opacity:1}}
+  .feeds{flex:1;min-height:0;display:grid;grid-template-columns:1.45fr 1fr;grid-template-rows:1fr 1fr;gap:10px;position:relative}
+  .feed{position:relative;border-radius:9px;overflow:hidden;background:#000;min-height:0;display:flex}
+  .feed.wrist{grid-row:1/3}
+  .feed img,.feed video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+  .feed .tag{position:absolute;left:8px;bottom:6px;font:11px var(--mono);color:#c6ffd9;background:#000a;padding:1px 8px;border-radius:4px;z-index:2}
+  .rec-ov{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;background:#000a;border-radius:6px;padding:4px 10px;z-index:3}
+  .rec-ov .rdot{width:9px;height:9px;border-radius:50%;background:#555}
+  .rec-ov.rec .rdot{background:var(--red);box-shadow:0 0 8px var(--red);animation:blink 1s infinite}
+  .rec-ov.paused .rdot{background:var(--amber)}
+  .prompt-ov{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#000b;border:1px solid #ffffff22;border-radius:20px;padding:4px 16px;font-size:13px;white-space:nowrap;z-index:3}
+  .replay-wm{position:absolute;top:10px;right:12px;font:12px var(--mono);color:#ffffff77;background:#0009;padding:2px 10px;border-radius:4px;letter-spacing:2px;z-index:3}
+  .ep-info{flex:none;display:flex;align-items:center;gap:16px;padding:9px 6px 2px;font-size:12.5px;color:var(--dim)}
+  .scrub{flex:1;display:flex;align-items:center;gap:10px}
+  .scrub input{flex:1;accent-color:var(--accent)}
+  .ctrl-bar{flex:none;display:flex;align-items:center;gap:10px;padding:10px 6px 2px;flex-wrap:wrap}
+  #recbtn{width:140px;font-weight:700}
+  #recbtn.rec{background:var(--red);border-color:var(--red);color:#fff}
+  #recbtn.paused{background:var(--amber);border-color:var(--amber);color:#241500}
+  .timer{font:600 20px var(--mono);width:96px}
+  .frames{font:12px var(--mono);color:var(--dim);min-width:96px}
+  .ctrl-bar .spacer{flex:1}
+  .hint{font-size:12px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap}
+  .hint span{white-space:nowrap}
+  .navbtn{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:38px;height:66px;border-radius:10px;background:#131824cc;border:1px solid var(--line);font-size:19px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+  .navbtn:hover{border-color:var(--accent)}
+  .navbtn.prev{left:-6px}.navbtn.next{right:-6px}
+  .strip{flex:none;display:flex;align-items:center;gap:5px;padding:12px 2px 4px;overflow-x:auto}
+  .cell{width:30px;height:22px;border-radius:5px;border:1.5px solid #33405a;background:#1b2436;cursor:pointer;flex:none;transition:.12s}
+  .cell:hover{border-color:var(--accent)}
+  .cell.saved{background:#12351f;border-color:#2b7a45}
+  .cell.trash{background:#1c202b;border-color:#3a4152;opacity:.5}
+  .cell.cur{outline:2px solid var(--accent);outline-offset:1px}
+  .cell.live{width:52px;border-color:var(--red);color:var(--red);font:10px var(--mono);display:flex;align-items:center;justify-content:center;background:#2a1218}
+  .strip .lbl{font:10px var(--mono);color:var(--dim);margin-right:4px;flex:none}
+
+  .exp-grid{display:grid;grid-template-columns:380px 1fr;gap:16px;max-width:1200px}
+  .pick{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:13px}
+  .pick input{width:auto}
+  .pick .cnt{margin-left:auto;font:11px var(--mono);color:var(--dim)}
+  pre.json{background:#0d1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12px/1.7 var(--mono);color:#9fd0ff;overflow:auto;max-height:400px}
+  .progress{height:6px;background:#0d1220;border-radius:3px;overflow:hidden;flex:1;min-width:120px}
+  .progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+  .modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(2px)}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;min-width:380px;max-width:560px;box-shadow:0 20px 60px #000c}
+  .modal h3{margin-bottom:14px;font-size:15px}
+  #toasts{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:9px 16px;font-size:13px;box-shadow:0 6px 24px #0009;animation:tin .2s ease-out;max-width:460px}
+  .toast.g{border-left-color:var(--green)} .toast.r{border-left-color:var(--red)} .toast.a{border-left-color:var(--amber)}
+  @keyframes tin{from{transform:translateY(10px);opacity:0}}
+  .toast.out{opacity:0;transition:.4s}
+  .spin{display:inline-block;animation:spin .8s linear infinite;font-weight:700}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  button:disabled.primary{opacity:.75}
+  footer{flex:none;display:flex;align-items:center;gap:16px;padding:6px 18px;background:var(--panel);border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SO101 <em>Collect Studio</em></div>
+  <nav>
+    <div class="tab active" data-step="1">① 设备与校准</div>
+    <div class="tab" data-step="2">② 相机绑定</div>
+    <div class="tab" data-step="3">③ 采集台</div>
+    <div class="tab" data-step="4">④ 导出 v2.1</div>
+  </nav>
+  <div class="hdr-right">
+    <span class="badge"><i class="dot" id="d-leader"></i>主动臂</span>
+    <span class="badge"><i class="dot" id="d-follower"></i>从动臂</span>
+    <span class="badge"><i class="dot" id="d-cams"></i>相机</span>
+    <span class="badge"><i class="dot" id="d-teleop"></i>遥操作 <span id="d-hz" class="mono" style="font-size:11px"></span></span>
+    <button id="estop" title="快捷键 E">⏻ 急停</button>
+  </div>
+</header>
+
+<main>
+  <!-- ========== STEP 1 ========== -->
+  <div class="step active" id="step1">
+    <h2>设备与校准</h2>
+    <div class="sub">串口按 USB 序列号自动识别(已预置你的两臂序列号)。校准 = 复制备份文件 + 只读体检。<b style="color:var(--amber)">本应用没有舵机重校准入口。</b></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="arm-head"><i class="dot" id="a-leader"></i><b>主动臂 leader</b><span class="chip" id="c-leader">未检测</span></div>
+        <div class="kv">
+          <span class="k">串口</span><span class="v" id="p-leader">—</span>
+          <span class="k">序列号</span><span class="v" id="s-leader">—</span>
+          <span class="k">校准 ID</span><span class="v" id="id-leader">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="arm-head"><i class="dot" id="a-follower"></i><b>从动臂 follower</b><span class="chip" id="c-follower">未检测</span></div>
+        <div class="kv">
+          <span class="k">串口</span><span class="v" id="p-follower">—</span>
+          <span class="k">序列号</span><span class="v" id="s-follower">—</span>
+          <span class="k">校准 ID</span><span class="v" id="id-follower">—</span>
+        </div>
+      </div>
+      <div class="card wide">
+        <b>① 一键导入校准 + 体检</b>
+        <div class="sub" style="margin:4px 0 0">复制内置备份到 <span class="mono" style="font-size:12px">~/.cache/huggingface/lerobot/calibration/…</span>,然后连接总线读当前位置,校验是否落在标定行程内(只读,不动舵机)。</div>
+        <div class="steprow">
+          <button id="calib-btn" class="primary">导入校准并体检</button>
+          <button id="health-btn">仅体检</button>
+          <span id="calib-msg" style="color:var(--dim);font-size:13px"></span>
+        </div>
+        <div id="joints-wrap" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div><b style="font-size:13px">从动臂</b><table class="joints" id="jt-follower"></table></div>
+            <div><b style="font-size:13px">主动臂</b><table class="joints" id="jt-leader"></table></div>
+          </div>
+          <div class="warn-note">✋ 体检异常时请人工检查接线与关节摆位 —— 不要执行舵机重校准。</div>
+        </div>
+      </div>
+      <div class="card wide">
+        <b>② 摆动识别(可选)</b>
+        <div class="sub" style="margin:4px 0 0">两臂序列号已预置,一般无需此步。仅当换了控制板/绑定存疑时使用:点击后<b>用手晃动主动臂</b>,系统检测哪个总线在动并更新绑定。</div>
+        <div class="steprow">
+          <button id="wiggle-btn">开始摆动识别</button>
+          <div class="progress"><i id="wiggle-bar"></i></div>
+          <span id="wiggle-msg" style="color:var(--dim);font-size:13px;min-width:220px"></span>
+        </div>
+      </div>
+      <div class="card wide">
+        <b>③ 连接机械臂</b>
+        <div class="sub" style="margin:4px 0 0">建立常驻连接(connect 后立即释放从动臂力矩,直到你在采集台开启遥操作)。</div>
+        <div class="steprow">
+          <button id="connect-btn" class="primary">连接两臂</button>
+          <button id="disconnect-btn">断开</button>
+          <span id="connect-msg" style="color:var(--dim);font-size:13px"></span>
+        </div>
+      </div>
+    </div>
+    <div class="next-bar" style="max-width:1100px">
+      <span></span>
+      <button class="primary" onclick="gotoStep(2)">下一步:相机绑定 →</button>
+    </div>
+  </div>
+
+  <!-- ========== STEP 2 ========== -->
+  <div class="step" id="step2">
+    <h2>相机绑定 <button id="cam-refresh" style="font-size:12px;padding:4px 12px;margin-left:10px">↻ 重新识别相机</button></h2>
+    <div class="sub">序号(index)每次启动可能漂移,<b>不用管它</b> —— 绑定跟随硬件 uniqueID,持久保存。<b>对着画面点角色按钮</b>改绑一次即可(角色互斥,自动让位),<b>✕</b> 可解绑;「内置」只是提示标签,默认不选但同样可以绑定。分辨率统一 640×480@30。拔插相机后点「重新识别」。</div>
+    <div class="cams" id="cams"></div>
+    <div class="next-bar">
+      <span id="cam-status" style="color:var(--dim);font-size:13px"></span>
+      <button class="primary" id="to3">保存绑定,进入采集台 →</button>
+    </div>
+  </div>
+
+  <!-- ========== STEP 3 ========== -->
+  <div class="step" id="step3">
+    <aside>
+      <section>
+        <h3>当前批次 Session</h3>
+        <div class="kv" style="grid-template-columns:56px 1fr;font-size:12px">
+          <span class="k">批次</span><span class="v" id="sess-name">—</span>
+          <span class="k">控制环</span><span class="v" id="loop-info">—</span>
+          <span class="k">编码队列</span><span class="v" id="enc-info">空闲</span>
+        </div>
+        <div class="steprow" style="margin-top:10px">
+          <button id="teleop-btn" class="primary" style="width:100%">▶ 开始遥操作</button>
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-top:6px">开启瞬间从动臂会跟随主动臂当前位姿,请先把主动臂摆到接近从动臂的姿态。</div>
+      </section>
+      <section>
+        <h3>任务(<kbd>T</kbd> 轮换)</h3>
+        <div id="tasklist"></div>
+        <div class="addtask">
+          <input type="text" id="newtask" placeholder="新任务提示词…">
+          <button id="addtask-btn">＋</button>
+        </div>
+      </section>
+      <section>
+        <h3>累计统计</h3>
+        <div class="stats">
+          <div class="stat g"><b id="st-saved">0</b><span>已保存</span></div>
+          <div class="stat r"><b id="st-trash">0</b><span>回收站</span></div>
+          <div class="stat a"><b id="st-min">0</b><span>分钟</span></div>
+        </div>
+        <div class="steprow"><button id="empty-trash" style="width:100%;font-size:12px">清空回收站</button></div>
+      </section>
+      <section style="border-bottom:none">
+        <h3>快捷键</h3>
+        <div class="keys" style="font-size:12px;gap:6px 12px">
+          <span class="k"><kbd>Space</kbd></span><span>开始 / 暂停</span>
+          <span class="k"><kbd>Enter</kbd></span><span>保存本集</span>
+          <span class="k"><kbd>⌫</kbd></span><span>舍弃 / 标废</span>
+          <span class="k"><kbd>←</kbd><kbd>→</kbd></span><span>翻页</span>
+          <span class="k"><kbd>G</kbd></span><span>跳转</span>
+          <span class="k"><kbd>?</kbd></span><span>全部快捷键</span>
+        </div>
+      </section>
+    </aside>
+
+    <div class="deck">
+      <div class="deck-top">
+        <span class="pageind" id="pageind">—</span>
+        <span class="chip" id="pagechip"></span>
+        <span class="meta" id="pagemeta"></span>
+        <span class="spacer"></span>
+        <button id="trash-btn" style="display:none">🗑 标废</button>
+        <button id="golive-btn" style="display:none">回到 LIVE <kbd style="margin-left:4px">End</kbd></button>
+      </div>
+      <div class="viewport">
+        <button class="navbtn prev" id="nav-prev" title="上一页 (←)">‹</button>
+        <button class="navbtn next" id="nav-next" title="下一页 (→)">›</button>
+        <div class="page" id="page">
+          <div class="feeds" id="feeds"></div>
+          <div class="ep-info" id="scrub-row" style="display:none">
+            <button id="play-btn" style="padding:4px 12px">⏯</button>
+            <span class="scrub"><span class="mono" id="scrub-t">0.0s</span><input type="range" id="scrub" min="0" max="1000" value="0"><span class="mono" id="scrub-d">—</span></span>
+          </div>
+          <div class="ctrl-bar" id="live-ctrl">
+            <button id="recbtn" class="primary">● 开始录制</button>
+            <span class="timer" id="timer">00:00.0</span>
+            <span class="frames" id="framecnt">0 帧</span>
+            <button id="savebtn" disabled>✓ 保存 <kbd style="margin-left:4px">Enter</kbd></button>
+            <button id="dropbtn" class="danger" disabled>✗ 舍弃 <kbd style="margin-left:4px">⌫</kbd></button>
+            <span class="spacer"></span>
+            <span class="hint"><span><kbd>←</kbd><kbd>→</kbd> 翻页</span><span><kbd>G</kbd> 跳转</span><span><kbd>T</kbd> 换任务</span><span><kbd>?</kbd> 帮助</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="strip" id="strip"></div>
+    </div>
+  </div>
+
+  <!-- ========== STEP 4 ========== -->
+  <div class="step" id="step4">
+    <h2>导出 v2.1 数据集</h2>
+    <div class="sub">按任务/批次勾选组合打包。打包是纯读操作,原始 episode 不动,可反复导出。EEF 字段(TCP 绝对位姿 + 相邻帧增量)在导出时注入。</div>
+    <div class="exp-grid">
+      <div class="card">
+        <b style="display:block;margin-bottom:10px">选择数据</b>
+        <div id="exp-picks"><span style="color:var(--dim);font-size:13px">暂无已保存 episode</span></div>
+        <div style="margin:12px 0 6px;font-size:13px;color:var(--dim)">数据集名称</div>
+        <input type="text" id="exp-name" value="so101_dataset_v21">
+        <div class="steprow">
+          <button class="primary" style="flex:1" id="export-btn">打包为 v2.1 + EEF</button>
+        </div>
+        <div class="steprow">
+          <div class="progress"><i id="exp-bar"></i></div>
+          <span id="exp-msg" style="font-size:12.5px;color:var(--dim)"></span>
+        </div>
+      </div>
+      <div class="card">
+        <b style="display:block;margin-bottom:10px">校验报告</b>
+        <pre class="json" id="exp-report">尚未导出</pre>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>SO101 Collect Studio</span>
+  <span id="foot-msg" style="color:var(--amber)"></span>
+  <span style="margin-left:auto">数据目录 ~/so101_data · 端口 8600</span>
+</footer>
+
+<div class="modal-bg" id="help-bg"><div class="modal">
+  <h3>快捷键</h3>
+  <div class="keys">
+    <span class="k"><kbd>Space</kbd></span><span>开始录制 / 暂停 / 恢复</span>
+    <span class="k"><kbd>Enter</kbd></span><span>保存当前 episode(晋升入库 + 后台编码)</span>
+    <span class="k"><kbd>Backspace</kbd></span><span>录制中:舍弃;历史页:标废 / 恢复</span>
+    <span class="k"><kbd>←</kbd> <kbd>→</kbd></span><span>上一页 / 下一页(录制中翻页会先自动暂停)</span>
+    <span class="k"><kbd>Home</kbd> <kbd>End</kbd></span><span>第一集 / 回到 LIVE</span>
+    <span class="k"><kbd>G</kbd></span><span>跳转到指定 episode</span>
+    <span class="k"><kbd>T</kbd></span><span>轮换任务(轮流采集)</span>
+    <span class="k"><kbd>E</kbd></span><span>急停:停遥操作 + 从动臂断力矩</span>
+    <span class="k"><kbd>?</kbd></span><span>本帮助(Esc 关闭)</span>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="jump-bg"><div class="modal" style="min-width:320px">
+  <h3>跳转到 episode</h3>
+  <input type="number" id="jump-input" placeholder="输入序号(第几页,从 0 起)" min="0">
+  <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+    <button onclick="closeModals()">取消</button>
+    <button class="primary" id="jump-go">跳转</button>
+  </div>
+</div></div>
+
+<div id="toasts"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = async (path, opts={}) => {
+  const r = await fetch(path, {headers:{'Content-Type':'application/json'}, ...opts});
+  if(!r.ok){ let d; try{ d=(await r.json()).detail }catch(e){ d=r.statusText }
+    throw new Error(d); }
+  return r.json();
+};
+const post = (path, body) => api(path, {method:'POST', body: body?JSON.stringify(body):undefined});
+
+function toast(msg, cls=''){
+  const d=document.createElement('div'); d.className='toast '+cls; d.textContent=msg;
+  $('toasts').appendChild(d);
+  setTimeout(()=>d.classList.add('out'),3200); setTimeout(()=>d.remove(),3800);
+}
+function closeModals(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+
+/* ================= 全局状态 ================= */
+const S = {
+  step: 1,
+  status: null,          // /api/status
+  eps: [],               // /api/episodes
+  page: 'live',          // 'live' | 数字索引
+  curTask: localStorage.getItem('curTask') || null,
+  lastErr: null,
+  playing: true,
+  camsStarted: false,
+};
+const liveIdx = () => S.eps.length;
+const onLive = () => S.page === 'live' || S.page >= liveIdx();
+
+/* ================= step 切换 ================= */
+function gotoStep(n){
+  // 关键:离开页面时必须拆掉 MJPEG <img> / <video>,否则连接一直占着,
+  // 浏览器同源并发上限(6)被吃满后,后续请求(如连接机械臂)会无限排队。
+  if(S.step===2 && n!==2) $('cams').innerHTML='';
+  if(S.step===3 && n!==3) $('feeds').innerHTML='';
+  S.step = n;
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  $('step'+n).classList.add('active');
+  document.querySelectorAll('nav .tab').forEach(t=>t.classList.toggle('active',+t.dataset.step===n));
+  if(n===2){ post('/api/cams/start_all').then(()=>api('/api/status')).then(st=>{S.status=st;renderCams();}).catch(e=>toast(e.message,'r')); }
+  if(n===3){ post('/api/cams/start_bound').catch(()=>{}); refreshEpisodes(true); }
+  if(n===4){ renderExport(); }
+}
+document.querySelectorAll('nav .tab').forEach(t=>t.onclick=()=>gotoStep(+t.dataset.step));
+
+/* ================= 轮询 ================= */
+async function poll(){
+  try{
+    S.status = await api('/api/status');
+    renderStatus();
+  }catch(e){ $('foot-msg').textContent='后端连接断开…'; }
+  setTimeout(poll, 500);
+}
+async function refreshEpisodes(jumpLive=false){
+  try{
+    S.eps = await api('/api/episodes');
+    if(jumpLive) S.page='live';
+    if(S.step===3) renderDeck();
+  }catch(e){}
+}
+
+/* ================= step1 渲染与操作 ================= */
+function renderStatus(){
+  const st=S.status; if(!st) return;
+  const arms=st.arms, ports=arms.ports||[];
+  for(const role of ['leader','follower']){
+    const p=ports.find(x=>x.role===role);
+    $('p-'+role).textContent = p? p.device : '未检测到';
+    $('s-'+role).textContent = p? p.serial : '—';
+    $('id-'+role).textContent = arms.binding[role].id;
+    const conn = arms.connected[role];
+    $('a-'+role).className = 'dot'+(conn?' ok':(p?' warn':''));
+    $('d-'+role).className = 'dot'+(conn?' ok':(p?' warn':''));
+    const c=$('c-'+role);
+    c.textContent = conn?'已连接':(p?'已识别(未连接)':'未检测');
+    c.className = 'chip'+(conn?' saved':(p?' warn':''));
+  }
+  // wiggle
+  const w=arms.wiggle||{};
+  $('wiggle-bar').style.width=(w.progress||0)+'%';
+  if(w.state==='running') $('wiggle-msg').textContent=w.msg||'请晃动主动臂…';
+  else if(w.state==='done'){ $('wiggle-msg').innerHTML='<span style="color:var(--green)">✓ '+w.msg+'</span>'; }
+  else if(w.state==='error'){ $('wiggle-msg').innerHTML='<span style="color:var(--red)">'+w.msg+'</span>'; }
+  // cams badge
+  const cams=st.cams, nExt=(cams.devices||[]).filter(d=>!d.builtin).length;
+  const bound=Object.values(cams.binding||{}).filter(Boolean).length;
+  $('d-cams').className='dot'+(bound===3&&!cams.missing.length?' ok':(nExt?' warn':''));
+  // teleop badge + rec
+  const rec=st.rec;
+  $('d-teleop').className='dot'+(rec.teleop_on?' ok':'');
+  $('d-hz').textContent = rec.teleop_on? rec.loop_hz+'Hz':'';
+  $('sess-name').textContent=rec.session;
+  $('loop-info').textContent = rec.teleop_on? `${rec.loop_hz} Hz · 超时 ${rec.overruns}` : '未运行';
+  const encs=rec.encoding||[];
+  $('enc-info').textContent = encs.length? encs.map(j=>j.id+':'+j.state).join(' '):'空闲';
+  const tb=$('teleop-btn');
+  if(rec.starting){
+    tb.disabled=true; tb.className='primary';
+    tb.innerHTML='<span class="spin">◌</span> '+(rec.phase||'启动中…');
+  }else{
+    tb.disabled=false;
+    tb.textContent = rec.teleop_on? '⏹ 停止遥操作':'▶ 开始遥操作';
+    tb.className = rec.teleop_on? 'ok':'primary';
+  }
+  if(S.prevTeleop===false && rec.teleop_on) toast('✓ 遥操作已就绪,从动臂跟随中','g');
+  S.prevTeleop = rec.teleop_on;
+  // rec state (live 页控件)
+  if(S.step===3 && onLive()) renderLiveCtrl();
+  // 错误上浮(去重)
+  const err = rec.error || arms.error;
+  if(err && err!==S.lastErr){ toast(err,'r'); S.lastErr=err; }
+  // 任务面板
+  renderTasks();
+  const s=st.stats||{};
+  $('st-saved').textContent=s.saved??0;
+  $('st-trash').textContent=s.trash??0;
+  $('st-min').textContent=s.minutes??0;
+}
+
+$('calib-btn').onclick = async ()=>{
+  try{
+    await post('/api/arms/calib_import');
+    $('calib-msg').textContent='已复制校准文件,体检中…';
+    await runHealth();
+    toast('校准导入完成(仅复制文件,未触碰舵机)','g');
+  }catch(e){ toast('校准导入失败:'+e.message,'r'); }
+};
+$('health-btn').onclick = ()=>runHealth().catch(e=>toast(e.message,'r'));
+async function runHealth(){
+  $('calib-msg').textContent='体检中(读取总线)…';
+  const rep=await post('/api/arms/health');
+  $('joints-wrap').style.display='block';
+  for(const role of ['follower','leader']){
+    const t=$('jt-'+role), r=rep[role]||{};
+    if(!r.joints){ t.innerHTML=`<tr><td class="bad-t">${r.msg||'无数据'}</td></tr>`; continue; }
+    t.innerHTML='<tr><th>关节</th><th>homing</th><th>range</th><th>当前</th><th>体检</th></tr>'+
+      r.joints.map(j=>`<tr><td>${j.name}</td><td>${j.homing_offset}</td><td>${j.range[0]} – ${j.range[1]}</td><td>${j.ticks}</td><td class="${j.ok?'ok-t':'bad-t'}">${j.ok?'✓ 在行程内':'✗ 越界'}</td></tr>`).join('');
+  }
+  const ok=(rep.follower||{}).ok&&(rep.leader||{}).ok;
+  $('calib-msg').innerHTML=ok?'<span style="color:var(--green)">✓ 两臂体检通过</span>':'<span style="color:var(--red)">存在异常,见下表</span>';
+}
+$('wiggle-btn').onclick=()=>post('/api/arms/wiggle').catch(e=>toast(e.message,'r'));
+$('connect-btn').onclick=async()=>{
+  $('connect-msg').textContent='连接中…';
+  try{ await post('/api/arms/connect'); $('connect-msg').innerHTML='<span style="color:var(--green)">✓ 已连接(从动臂力矩已释放)</span>'; toast('两臂已连接','g'); }
+  catch(e){ $('connect-msg').textContent=''; toast('连接失败:'+e.message,'r'); }
+};
+$('disconnect-btn').onclick=()=>post('/api/arms/disconnect').then(()=>toast('已断开')).catch(e=>toast(e.message,'r'));
+$('estop').onclick=()=>estop();
+function estop(){ post('/api/arms/estop').then(()=>toast('⏻ 急停:遥操作已停,从动臂断力矩','r')).catch(e=>toast(e.message,'r')); }
+
+/* ================= step2 相机 ================= */
+function renderCams(){
+  const st=S.status; if(!st) return;
+  const wrap=$('cams'); wrap.innerHTML='';
+  const roleNames={wrist:'腕部 wrist',left_rear:'左后 left_rear',right_rear:'右后 right_rear'};
+  for(const d of st.cams.devices){
+    const card=document.createElement('div'); card.className='card cam-card';
+    // 所有相机都可绑定,内置只是提示;已绑定的卡片附带解绑按钮
+    const roles = `<div class="roles">${Object.keys(roleNames).map(r=>
+        `<button data-uid="${d.unique_id}" data-role="${r}" class="${d.role===r?'sel':''}">${roleNames[r]}</button>`).join('')}
+      <button data-unbind="${d.role||''}" title="解除此相机的角色" ${d.role?'':'disabled'} style="flex:0 0 40px">✕</button></div>`;
+    card.innerHTML=`<img src="/stream/uid/${encodeURIComponent(d.unique_id)}.mjpg">
+      <div class="nm">${d.name} <span class="chip">index ${d.index}</span>${d.builtin?' <span class="chip warn">内置</span>':''}${d.role?` <span class="chip saved">${d.role}</span>`:''}</div>
+      <div class="uid">uniqueID ${d.unique_id}</div>${roles}`;
+    wrap.appendChild(card);
+  }
+  const bound=Object.values(st.cams.binding).filter(Boolean).length;
+  $('cam-status').textContent=`已绑定 ${bound} / 3 个角色` + (st.cams.missing.length? ` · 缺失:${st.cams.missing.join(',')}`:'');
+}
+$('cams').addEventListener('click',async e=>{
+  const u=e.target.closest('button[data-unbind]');
+  if(u){
+    if(!u.dataset.unbind) return;
+    try{
+      await post('/api/cams/unbind',{role:u.dataset.unbind});
+      S.status=await api('/api/status'); renderCams();
+      toast(`已解绑 ${u.dataset.unbind}`,'a');
+    }catch(err){ toast(err.message,'r'); }
+    return;
+  }
+  const b=e.target.closest('button[data-role]'); if(!b) return;
+  try{
+    await post('/api/cams/bind',{role:b.dataset.role,unique_id:b.dataset.uid});
+    S.status=await api('/api/status'); renderCams();
+    toast(`已绑定 ${b.dataset.role}`,'g');
+  }catch(err){ toast(err.message,'r'); }
+});
+$('to3').onclick=async()=>{ await post('/api/cams/start_bound').catch(()=>{}); toast('相机绑定已保存(uniqueID)','g'); gotoStep(3); };
+$('cam-refresh').onclick=async()=>{
+  $('cams').innerHTML='';  // 先拆掉旧流,避免占用连接
+  try{
+    await post('/api/cams/start_all');
+    S.status=await api('/api/status'); renderCams();
+    toast('已重新枚举相机并同步流','g');
+  }catch(e){ toast(e.message,'r'); }
+};
+
+/* ================= step3 deck ================= */
+function fmtT(s){ const m=Math.floor(s/60); return String(m).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0')+'.'+Math.floor(s*10%10); }
+
+function taskList(){ return (S.status?.tasks)||[]; }
+function curTask(){
+  const ts=taskList(); if(!ts.length) return null;
+  return ts.find(t=>t.slug===S.curTask) || ts[0];
+}
+function renderTasks(){
+  const el=$('tasklist'); if(!el) return;
+  const per=(S.status?.stats?.per_task)||{};
+  const cur=curTask();
+  el.innerHTML='';
+  for(const t of taskList()){
+    const d=document.createElement('div'); d.className='task'+(cur&&t.slug===cur.slug?' sel':'');
+    d.innerHTML=`<div class="prompt">${t.prompt}</div><div class="meta"><span>${t.slug}</span><b>${per[t.slug]||0} 集</b></div>`;
+    d.onclick=()=>{ S.curTask=t.slug; localStorage.setItem('curTask',t.slug); renderTasks(); if(onLive()) renderDeck(); };
+    el.appendChild(d);
+  }
+}
+$('addtask-btn').onclick=async()=>{
+  const v=$('newtask').value.trim(); if(!v) return;
+  try{ const t=await post('/api/tasks',{prompt:v}); S.curTask=t.slug; localStorage.setItem('curTask',t.slug);
+    $('newtask').value=''; toast('新任务已创建:'+v,'g'); }
+  catch(e){ toast(e.message,'r'); }
+};
+$('empty-trash').onclick=async()=>{
+  if(!confirm('确认清空回收站?此操作不可恢复')) return;
+  const r=await post('/api/trash/empty'); toast(`回收站已清空(${r.removed} 集)`,'a'); refreshEpisodes();
+};
+
+const FEED_LAYOUT=[['wrist','wrist'],['left_rear',''],['right_rear','']];
+function renderDeck(){
+  const live=onLive();
+  const feeds=$('feeds');
+  if(live){
+    S.page='live';
+    $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
+    $('pagemeta').textContent='task: '+(curTask()?.slug||'—');
+    feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
+      `<div class="feed ${cls}"><img src="/stream/role/${r}.mjpg"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
+      +`<div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>`
+      +`<div class="prompt-ov">“${curTask()?.prompt||''}”</div>`;
+    $('scrub-row').style.display='none'; $('live-ctrl').style.display='flex';
+    $('trash-btn').style.display='none'; $('golive-btn').style.display='none';
+    renderLiveCtrl();
+  }else{
+    const e=S.eps[S.page];
+    if(!e){ S.page='live'; return renderDeck(); }
+    $('pageind').innerHTML=`<b>${e.id}</b> <span style="color:var(--dim)">· 第 ${S.page+1} / ${liveIdx()+1} 页</span>`;
+    $('pagechip').className='chip '+(e.status==='saved'?'saved':'trash');
+    $('pagechip').textContent=e.status==='saved'?'已保存':'回收站';
+    $('pagemeta').textContent=`${e.task_slug} · ${(e.dur||0).toFixed(1)}s · ${e.frames} 帧 · ${e.created_at||''}`;
+    feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
+      `<div class="feed ${cls}"><video data-role="${r}" src="/api/episodes/${e.id}/video/${r}" preload="metadata" ${r==='wrist'?'':'muted'}></video><span class="tag">${r.toUpperCase()}</span></div>`).join('')
+      +`<div class="replay-wm">▶ 回放</div>`
+      +`<div class="prompt-ov">“${e.task_prompt}”</div>`;
+    $('scrub-row').style.display='flex'; $('live-ctrl').style.display='none';
+    $('trash-btn').style.display='inline-block';
+    $('trash-btn').textContent=e.status==='trash'?'♻ 恢复':'🗑 标废';
+    $('golive-btn').style.display='inline-block';
+    $('scrub-d').textContent=(e.dur||0).toFixed(1)+'s';
+    setupPlayback(e);
+  }
+  if(live){ $('pagechip').className='chip live'; $('pagechip').textContent=(S.status?.rec.state==='rec')?'录制中':'实时'; }
+  renderStrip();
+}
+
+function vids(){ return [...document.querySelectorAll('#feeds video')]; }
+function setupPlayback(e){
+  const vs=vids(); if(!vs.length) return;
+  const master=vs[0];
+  master.addEventListener('timeupdate',()=>{
+    $('scrub').value = e.dur? Math.round(master.currentTime/e.dur*1000):0;
+    $('scrub-t').textContent=master.currentTime.toFixed(1)+'s';
+    for(const v of vs.slice(1)) if(Math.abs(v.currentTime-master.currentTime)>0.12) v.currentTime=master.currentTime;
+  });
+  master.addEventListener('ended',()=>{ vs.forEach(v=>{v.currentTime=0;v.play();}); });
+  Promise.allSettled(vs.map(v=>v.play())).then(()=>{});
+}
+$('play-btn').onclick=()=>{
+  const vs=vids(); if(!vs.length) return;
+  vs[0].paused? vs.forEach(v=>v.play()) : vs.forEach(v=>v.pause());
+};
+$('scrub').addEventListener('input',ev=>{
+  const e=S.eps[S.page]; const vs=vids(); if(!e||!vs.length) return;
+  const t=ev.target.value/1000*(e.dur||0);
+  vs.forEach(v=>v.currentTime=t);
+});
+
+function renderStrip(){
+  const s=$('strip'); s.innerHTML='<span class="lbl">EPISODES</span>';
+  S.eps.forEach((e,i)=>{
+    const c=document.createElement('div');
+    c.className='cell '+(e.status==='saved'?'saved':'trash')+(S.page===i?' cur':'');
+    c.title=`${e.id} · ${e.task_slug} · ${(e.dur||0).toFixed(1)}s${e.status==='trash'?' · 回收站':''}`;
+    c.onclick=()=>flipTo(i);
+    s.appendChild(c);
+  });
+  const lv=document.createElement('div');
+  lv.className='cell live'+(onLive()?' cur':''); lv.textContent='LIVE';
+  lv.onclick=()=>flipTo('live');
+  s.appendChild(lv);
+}
+
+function renderLiveCtrl(){
+  const rec=S.status?.rec; if(!rec) return;
+  const ov=$('rec-ov'); if(!ov) return;
+  ov.className='rec-ov '+(rec.state==='rec'?'rec':rec.state==='paused'?'paused':'');
+  $('rec-txt').textContent= rec.state==='idle'?'待机': (rec.state==='rec'?'REC ':'已暂停 ')+fmtT(rec.elapsed)+' · '+rec.episode_id;
+  const btn=$('recbtn');
+  btn.className= rec.state==='rec'?'rec': rec.state==='paused'?'paused':'primary';
+  btn.textContent= rec.state==='idle'?'● 开始录制': rec.state==='rec'?'❚❚ 暂停':'▶ 继续';
+  $('timer').textContent=fmtT(rec.elapsed);
+  $('framecnt').textContent=rec.frames+' 帧'+(rec.jpeg_backlog>60?` · 积压${rec.jpeg_backlog}`:'');
+  $('savebtn').disabled=$('dropbtn').disabled= rec.state==='idle';
+  $('pagechip').className='chip live'; $('pagechip').textContent= rec.state==='rec'?'录制中': rec.state==='paused'?'已暂停':'实时';
+}
+
+function flipTo(idx,dir){
+  const target = idx==='live'? 'live' : Math.max(0,Math.min(liveIdx()-1,idx));
+  if(target===S.page) return;
+  const rec=S.status?.rec;
+  if(rec && rec.state==='rec'){ post('/api/rec/pause'); toast('翻页已自动暂停录制','a'); }
+  const from = S.page==='live'? liveIdx():S.page;
+  const to = target==='live'? liveIdx():target;
+  dir = dir ?? (to>from?'r':'l');
+  S.page=target;
+  const pg=$('page');
+  pg.classList.remove('flip-r','flip-l'); void pg.offsetWidth;
+  pg.classList.add(dir==='r'?'flip-r':'flip-l');
+  renderDeck();
+}
+$('nav-prev').onclick=()=>navPrev();
+$('nav-next').onclick=()=>navNext();
+function navPrev(){ const i = S.page==='live'? liveIdx()-1 : S.page-1; if(i>=0) flipTo(i,'l'); }
+function navNext(){ const i = S.page==='live'? 'live' : (S.page+1>=liveIdx()?'live':S.page+1); flipTo(i,'r'); }
+$('golive-btn').onclick=()=>flipTo('live','r');
+$('trash-btn').onclick=()=>toggleTrash();
+
+async function toggleTrash(){
+  if(onLive()) return;
+  const e=S.eps[S.page]; if(!e) return;
+  try{
+    await post(`/api/episodes/${e.id}/${e.status==='trash'?'restore':'trash'}`);
+    toast(e.status==='trash'? e.id+' 已恢复' : e.id+' 已移入回收站','a');
+    await refreshEpisodes();
+  }catch(err){ toast(err.message,'r'); }
+}
+
+/* ---- 遥操作 / 录制 ---- */
+$('teleop-btn').onclick=async()=>{
+  const rec=S.status?.rec; if(!rec || rec.starting) return;
+  const tb=$('teleop-btn');
+  tb.disabled=true;  // 立即给反馈,真实状态由轮询接管
+  try{
+    if(rec.teleop_on){
+      tb.textContent='⏳ 停止中…';
+      await post('/api/teleop/stop');
+      toast('遥操作已停止(力矩保持,松臂用急停 E)');
+    }else{
+      tb.innerHTML='<span class="spin">◌</span> 启动中…';
+      await post('/api/teleop/start');  // 立即返回,进度看按钮上的阶段文字
+    }
+  }catch(e){ toast(e.message,'r'); tb.disabled=false; }
+};
+async function recToggle(){
+  const rec=S.status?.rec; if(!rec) return;
+  if(!onLive()) flipTo('live','r');
+  try{
+    if(rec.state==='rec') await post('/api/rec/pause');
+    else{
+      const t=curTask(); if(!t) return toast('请先创建任务','r');
+      await post('/api/rec/start',{task_slug:t.slug});
+    }
+    S.status=await api('/api/status'); renderLiveCtrl();
+  }catch(e){ toast(e.message,'r'); }
+}
+async function recSave(){
+  try{
+    const m=await post('/api/rec/save');
+    toast(`✓ ${m.id} 已保存(${m.frames} 帧,后台编码中)`,'g');
+    await refreshEpisodes();
+  }catch(e){ toast(e.message,'r'); }
+}
+async function recDrop(){
+  try{ await post('/api/rec/discard'); toast('✗ 已舍弃,暂存已删除','r'); }
+  catch(e){ toast(e.message,'r'); }
+}
+$('recbtn').onclick=recToggle;
+$('savebtn').onclick=recSave;
+$('dropbtn').onclick=recDrop;
+
+/* ================= step4 导出 ================= */
+async function renderExport(){
+  try{
+    const ss=await api('/api/export/sessions');
+    const el=$('exp-picks');
+    if(!ss.length){ el.innerHTML='<span style="color:var(--dim);font-size:13px">暂无已保存 episode</span>'; return; }
+    el.innerHTML=ss.map((s,i)=>
+      `<label class="pick"><input type="checkbox" checked data-i="${i}">${s.task_slug} / ${s.session}<span class="cnt">${s.count} 集 · ${s.minutes} 分</span></label>`).join('');
+    el.dataset.sessions=JSON.stringify(ss);
+  }catch(e){ toast(e.message,'r'); }
+}
+$('export-btn').onclick=async()=>{
+  const ss=JSON.parse($('exp-picks').dataset.sessions||'[]');
+  const sel=[...document.querySelectorAll('#exp-picks input:checked')].map(c=>{
+    const s=ss[+c.dataset.i]; return {task_slug:s.task_slug, session:s.session};
+  });
+  if(!sel.length) return toast('请至少勾选一个批次','r');
+  try{
+    await post('/api/export',{name:$('exp-name').value.trim()||'so101_dataset_v21', selection:sel});
+    pollExport();
+  }catch(e){ toast(e.message,'r'); }
+};
+async function pollExport(){
+  const j=await api('/api/export/status');
+  $('exp-bar').style.width=(j.progress||0)+'%';
+  $('exp-msg').textContent=j.msg||'';
+  if(j.state==='running') return setTimeout(pollExport,700);
+  if(j.state==='done'){ $('exp-report').textContent=JSON.stringify(j.report,null,2); toast('导出完成:'+j.report.path,'g'); }
+  if(j.state==='error'){ $('exp-report').textContent='导出失败:'+j.msg; toast('导出失败:'+j.msg,'r'); }
+}
+
+/* ================= 键盘 ================= */
+document.addEventListener('keydown',e=>{
+  if(e.target instanceof Element && e.target.matches('input,textarea')){ if(e.key==='Escape') e.target.blur(); return; }
+  if(e.key==='Escape'){ closeModals(); return; }
+  if(e.key==='?'){ $('help-bg').classList.toggle('open'); return; }
+  if(e.key==='e'||e.key==='E'){ estop(); return; }
+  if(S.step!==3) return;
+  switch(e.key){
+    case ' ': e.preventDefault(); recToggle(); break;
+    case 'Enter': e.preventDefault(); if(onLive()&&S.status?.rec.state!=='idle') recSave(); break;
+    case 'Backspace': e.preventDefault();
+      if(onLive()){ if(S.status?.rec.state!=='idle') recDrop(); } else toggleTrash(); break;
+    case 'ArrowLeft': e.preventDefault(); navPrev(); break;
+    case 'ArrowRight': e.preventDefault(); navNext(); break;
+    case 'Home': e.preventDefault(); if(liveIdx()>0) flipTo(0,'l'); break;
+    case 'End': e.preventDefault(); flipTo('live','r'); break;
+    case 'g': case 'G': $('jump-bg').classList.add('open'); $('jump-input').value=''; setTimeout(()=>$('jump-input').focus(),50); break;
+    case 't': case 'T': {
+      const ts=taskList(); if(!ts.length) break;
+      const cur=curTask(); const i=(ts.findIndex(x=>x.slug===cur.slug)+1)%ts.length;
+      S.curTask=ts[i].slug; localStorage.setItem('curTask',S.curTask);
+      renderTasks(); if(onLive()) renderDeck();
+      toast('当前任务 → '+ts[i].prompt); break; }
+  }
+});
+$('jump-go').onclick=()=>{ const v=parseInt($('jump-input').value); closeModals(); if(!isNaN(v)) flipTo(v); };
+$('jump-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('jump-go').click();} e.stopPropagation(); });
+
+/* ================= 启动 ================= */
+poll();
+refreshEpisodes(true);
+setInterval(()=>{ if(S.step===3 && onLive()) refreshEpisodes(); }, 8000);
+</script>
+</body>
+</html>
