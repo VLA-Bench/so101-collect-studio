@@ -91,68 +91,43 @@ def normalized_to_rad(joint: str, value: float, arm_id: str = "my_awesome_follow
     return (ticks - 2048.0) * (2 * np.pi / 4096.0)
 
 
+def _mat_to_euler(R) -> np.ndarray:
+    """旋转矩阵 → RPY(extrinsic xyz)弧度,与 `_rpy_to_R` 互逆。
+
+    约定 `R = Rz(yaw) @ Ry(pitch) @ Rx(roll)`,取值 [-pi, pi]。
+    """
+    roll = np.arctan2(R[2, 1], R[2, 2])
+    pitch = -np.arcsin(np.clip(R[2, 0], -1.0, 1.0))
+    yaw = np.arctan2(R[1, 0], R[0, 0])
+    return np.array([roll, pitch, yaw])
+
+
 def fk_pose(joint_norm: list[float], arm_id: str = "my_awesome_follower_arm") -> np.ndarray:
-    """归一化关节值[6](含 gripper,忽略) → [x,y,z,qw,qx,qy,qz]。"""
+    """归一化关节值[6](含 gripper,忽略) → [x,y,z,roll,pitch,yaw]。"""
     q = {n: normalized_to_rad(n, v, arm_id) for n, v in zip(FK_JOINTS, joint_norm[:5])}
     T = np.eye(4)
     for j in _chain():
         T = T @ _T(j["xyz"], j["rpy"])
         if j["type"] == "revolute" and j["name"] in q:
             T = T @ _axis_rot(j["axis"], q[j["name"]])
-    return np.concatenate([T[:3, 3], _mat_to_quat(T[:3, :3])]).astype(np.float32)
+    return np.concatenate([T[:3, 3], _mat_to_euler(T[:3, :3])]).astype(np.float32)
 
 
-def _mat_to_quat(R) -> np.ndarray:
-    """旋转矩阵 → [qw,qx,qy,qz]。"""
-    t = np.trace(R)
-    if t > 0:
-        s = np.sqrt(t + 1.0) * 2
-        w, x, y, z = 0.25 * s, (R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s
-    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
-        s = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
-        w, x, y, z = (R[2, 1] - R[1, 2]) / s, 0.25 * s, (R[0, 1] + R[1, 0]) / s, (R[0, 2] + R[2, 0]) / s
-    elif R[1, 1] > R[2, 2]:
-        s = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
-        w, x, y, z = (R[0, 2] - R[2, 0]) / s, (R[0, 1] + R[1, 0]) / s, 0.25 * s, (R[1, 2] + R[2, 1]) / s
-    else:
-        s = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
-        w, x, y, z = (R[1, 0] - R[0, 1]) / s, (R[0, 2] + R[2, 0]) / s, (R[1, 2] + R[2, 1]) / s, 0.25 * s
-    q = np.array([w, x, y, z])
-    return q / np.linalg.norm(q)
+def eef_series(states: np.ndarray, actions: np.ndarray,
+               arm_id: str = "my_awesome_follower_arm"):
+    """整条 episode 的归一化关节序列 → (obs_eef[N,7], act_eef[N,7])。
 
-
-def quat_mul(a, b):
-    w1, x1, y1, z1 = a
-    w2, x2, y2, z2 = b
-    return np.array([
-        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-    ])
-
-
-def quat_conj(q):
-    return np.array([q[0], -q[1], -q[2], -q[3]])
-
-
-def eef_series(states: np.ndarray, arm_id: str = "my_awesome_follower_arm"):
-    """整条 episode 的归一化 observation.state[N,6] →
-    (obs_eef[N,7] 绝对位姿, act_eef[N,7] 相邻帧增量;末帧 [0,0,0,1,0,0,0])。
-
-    四元数做半球连续性对齐;增量为基座系:dp = p_{t+1}-p_t,dq = q_{t+1} ⊗ q_t^{-1}。
+    两者都是**绝对位姿** `[x,y,z,roll,pitch,yaw,gripper]`:
+      - `obs_eef[t] = [FK(states[t]), states[t][5]]`(follower 实际位姿)
+      - `act_eef[t] = [FK(actions[t]), actions[t][5]]`(leader 目标位姿)
+    gripper 通道与该数据集关节第 6 维同值同单位(0–100 归一化),不做换算。
     """
-    n = len(states)
-    poses = np.stack([fk_pose(states[i], arm_id) for i in range(n)])
-    for i in range(1, n):  # hemisphere continuity
-        if np.dot(poses[i - 1, 3:], poses[i, 3:]) < 0:
-            poses[i, 3:] = -poses[i, 3:]
-    deltas = np.zeros((n, 7), dtype=np.float32)
-    deltas[:, 3] = 1.0
-    for i in range(n - 1):
-        deltas[i, :3] = poses[i + 1, :3] - poses[i, :3]
-        dq = quat_mul(poses[i + 1, 3:], quat_conj(poses[i, 3:]))
-        if dq[0] < 0:
-            dq = -dq
-        deltas[i, 3:] = dq / np.linalg.norm(dq)
-    return poses.astype(np.float32), deltas
+    obs = np.stack([
+        np.concatenate([fk_pose(states[i], arm_id), [states[i][5]]])
+        for i in range(len(states))
+    ]).astype(np.float32)
+    act = np.stack([
+        np.concatenate([fk_pose(actions[i], arm_id), [actions[i][5]]])
+        for i in range(len(actions))
+    ]).astype(np.float32)
+    return obs, act

@@ -373,12 +373,12 @@
   "codebase_version": "v2.1",
   "fps": 30,
   "features": {
-    "observation.state":      { "dtype":"float32", "shape":[6] },
-    "action":                 { "dtype":"float32", "shape":[6] },
-    "observation.state.eef":  { "dtype":"float32", "shape":[7],
-        "names": ["x","y","z","qw","qx","qy","qz"] },   // TCP 绝对位姿(基座系,FK)
-    "action.eef":             { "dtype":"float32", "shape":[7],
-        "names": ["dx","dy","dz","dqw","dqx","dqy","dqz"] }, // 相邻帧增量,末帧=[0,0,0,1,0,0,0]
+    "observation.pos_state":  { "dtype":"float32", "shape":[6] },
+    "pos_action":             { "dtype":"float32", "shape":[6] },
+    "observation.eef_state":  { "dtype":"float32", "shape":[7],
+        "names": ["x","y","z","roll","pitch","yaw","gripper"] }, // TCP 绝对位姿 = FK(follower 关节)
+    "eef_action":             { "dtype":"float32", "shape":[7],
+        "names": ["x","y","z","roll","pitch","yaw","gripper"] }, // 绝对目标位姿 = FK(leader action 关节)
     "observation.images.wrist":      { "dtype":"video", "shape":[480,640,3] },
     "observation.images.left_rear":  { "dtype":"video", "shape":[720,1280,3] },
     "observation.images.right_rear": { "dtype":"video", "shape":[720,1280,3] }

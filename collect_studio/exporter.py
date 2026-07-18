@@ -25,7 +25,41 @@ log = logging.getLogger("exporter")
 CHUNK = 1000
 ROLES = ["wrist", "left_rear", "right_rear"]
 
+STATE_KEY = "observation.pos_state"
+ACTION_KEY = "pos_action"
+EEF_STATE_KEY = "observation.eef_state"
+EEF_ACTION_KEY = "eef_action"
+EEF_NAMES = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
+
 JOB = {"state": "idle"}  # idle|running|done|error
+
+
+def build_modality_json() -> dict:
+    """GR00T modality 映射,与 so101-nexus `build_modality_json()` 同结构。
+
+    所有条目显式写 `original_key`,不依赖 loader 默认值。
+    """
+    def eef(key):
+        return {
+            "eef_position": {"start": 0, "end": 3, "original_key": key},
+            "eef_rotation": {"start": 3, "end": 6, "original_key": key,
+                             "rotation_type": "euler_angles_rpy"},
+            "eef_gripper": {"start": 6, "end": 7, "original_key": key},
+        }
+    return {
+        "state": {
+            "single_arm": {"start": 0, "end": 5, "original_key": STATE_KEY},
+            "gripper": {"start": 5, "end": 6, "original_key": STATE_KEY},
+            **eef(EEF_STATE_KEY),
+        },
+        "action": {
+            "single_arm": {"start": 0, "end": 5, "original_key": ACTION_KEY},
+            "gripper": {"start": 5, "end": 6, "original_key": ACTION_KEY},
+            **eef(EEF_ACTION_KEY),
+        },
+        "video": {r: {"original_key": f"observation.images.{r}"} for r in ROLES},
+        "annotation": {"human.action.task_description": {"original_key": "task_index"}},
+    }
 
 
 def start_export(name: str, selection: list[dict], delta_frame: str = "base"):
@@ -105,7 +139,8 @@ def _run(name: str, selection, delta_frame: str):
 
         episodes_jsonl, stats_jsonl = [], []
         total_frames = 0
-        checks = {"frame_mismatch": [], "eef_residual_max": 0.0, "quat_norm_err": 0.0}
+        checks = {"frame_mismatch": [], "eef_action_state_gap_max": 0.0,
+                  "eef_euler_abs_max": 0.0, "eef_gripper_err_max": 0.0}
         global_idx = 0
 
         for ei, e in enumerate(eps):
@@ -116,20 +151,25 @@ def _run(name: str, selection, delta_frame: str):
             states = np.array(t["observation.state"].to_pylist(), dtype=np.float32)
             actions = np.array(t["action"].to_pylist(), dtype=np.float32)
 
-            obs_eef, act_eef = fk.eef_series(states)
-            # 校验:位置增量回代
+            obs_eef, act_eef = fk.eef_series(states, actions)
+            # 校验:leader 目标位姿 vs 下一帧 follower 实测位姿(有跟随滞后,只落盘不硬卡)
             if n > 1:
-                resid = np.abs(states_resid := (obs_eef[:-1, :3] + act_eef[:-1, :3] - obs_eef[1:, :3])).max()
-                checks["eef_residual_max"] = max(checks["eef_residual_max"], float(resid))
-            qn = np.abs(np.linalg.norm(obs_eef[:, 3:], axis=1) - 1).max()
-            checks["quat_norm_err"] = max(checks["quat_norm_err"], float(qn))
+                gap = float(np.abs(act_eef[:-1, :3] - obs_eef[1:, :3]).max())
+                checks["eef_action_state_gap_max"] = max(checks["eef_action_state_gap_max"], gap)
+            checks["eef_euler_abs_max"] = max(
+                checks["eef_euler_abs_max"],
+                float(np.abs(obs_eef[:, 3:6]).max()), float(np.abs(act_eef[:, 3:6]).max()))
+            checks["eef_gripper_err_max"] = max(
+                checks["eef_gripper_err_max"],
+                float(np.abs(obs_eef[:, 6] - states[:, 5]).max()),
+                float(np.abs(act_eef[:, 6] - actions[:, 5]).max()))
 
             task_idx = task_prompts[e["task_prompt"]]
             table = pa.table({
-                "observation.state": pa.array(states.tolist(), type=pa.list_(pa.float32(), 6)),
-                "action": pa.array(actions.tolist(), type=pa.list_(pa.float32(), 6)),
-                "observation.state.eef": pa.array(obs_eef.tolist(), type=pa.list_(pa.float32(), 7)),
-                "action.eef": pa.array(act_eef.tolist(), type=pa.list_(pa.float32(), 7)),
+                "observation.pos_state": pa.array(states.tolist(), type=pa.list_(pa.float32(), 6)),
+                "pos_action": pa.array(actions.tolist(), type=pa.list_(pa.float32(), 6)),
+                "observation.eef_state": pa.array(obs_eef.tolist(), type=pa.list_(pa.float32(), 7)),
+                "eef_action": pa.array(act_eef.tolist(), type=pa.list_(pa.float32(), 7)),
                 "timestamp": pa.array(np.arange(n, dtype=np.float32) / fps),
                 "frame_index": pa.array(np.arange(n, dtype=np.int64)),
                 "episode_index": pa.array(np.full(n, ei, dtype=np.int64)),
@@ -139,10 +179,10 @@ def _run(name: str, selection, delta_frame: str):
             pq.write_table(table, out / "data" / "chunk-000" / f"episode_{ei:06d}.parquet")
 
             ep_stats = {
-                "observation.state": _stats_entry(states),
-                "action": _stats_entry(actions),
-                "observation.state.eef": _stats_entry(obs_eef),
-                "action.eef": _stats_entry(act_eef),
+                "observation.pos_state": _stats_entry(states),
+                "pos_action": _stats_entry(actions),
+                "observation.eef_state": _stats_entry(obs_eef),
+                "eef_action": _stats_entry(act_eef),
                 "timestamp": _stats_entry(np.arange(n, dtype=np.float32).reshape(-1, 1) / fps),
                 "frame_index": _stats_entry(np.arange(n, dtype=np.int64).reshape(-1, 1)),
                 "episode_index": _stats_entry(np.full((n, 1), ei, dtype=np.int64)),
@@ -167,10 +207,10 @@ def _run(name: str, selection, delta_frame: str):
         feat_num = lambda shape, names: {"dtype": "float32", "shape": [shape], "names": names}  # noqa: E731
         motors = [f"{j}.pos" for j in ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]]
         features = {
-            "observation.state": feat_num(6, motors),
-            "action": feat_num(6, motors),
-            "observation.state.eef": feat_num(7, ["x", "y", "z", "qw", "qx", "qy", "qz"]),
-            "action.eef": feat_num(7, ["dx", "dy", "dz", "dqw", "dqx", "dqy", "dqz"]),
+            "observation.pos_state": feat_num(6, motors),
+            "pos_action": feat_num(6, motors),
+            "observation.eef_state": feat_num(7, EEF_NAMES),
+            "eef_action": feat_num(7, EEF_NAMES),
             "timestamp": {"dtype": "float32", "shape": [1], "names": None},
             "frame_index": {"dtype": "int64", "shape": [1], "names": None},
             "episode_index": {"dtype": "int64", "shape": [1], "names": None},
@@ -199,10 +239,19 @@ def _run(name: str, selection, delta_frame: str):
             "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
             "features": features,
             # 自定义扩展说明
-            "eef": {"frame": delta_frame, "convention": "dq = q_{t+1} * q_t^{-1} (base frame), last frame identity",
-                    "fk_target": "gripper_frame_link", "urdf": "so101_new_calib.urdf"},
+            "eef": {
+                "frame": delta_frame,
+                "format": "[x, y, z, roll, pitch, yaw, gripper]",
+                "rotation": "euler RPY (extrinsic xyz), R = Rz(yaw) @ Ry(pitch) @ Rx(roll), [-pi, pi]",
+                "state_semantics": "FK(follower state joints), absolute",
+                "action_semantics": "FK(leader action joints), absolute",
+                "gripper": "与该数据集关节第 6 维同值同单位(0-100 归一化)",
+                "fk_target": "gripper_frame_link", "urdf": "so101_new_calib.urdf",
+            },
         }
         (out / "meta" / "info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2))
+        (out / "meta" / "modality.json").write_text(
+            json.dumps(build_modality_json(), ensure_ascii=False, indent=2))
         with open(out / "meta" / "episodes.jsonl", "w") as f:
             for x in episodes_jsonl:
                 f.write(json.dumps(x, ensure_ascii=False) + "\n")
@@ -216,9 +265,13 @@ def _run(name: str, selection, delta_frame: str):
         report = {
             "episodes": len(eps), "frames": total_frames, "tasks": len(task_prompts),
             "frame_mismatch": checks["frame_mismatch"],
-            "eef_residual_max": checks["eef_residual_max"],
-            "quat_norm_err": checks["quat_norm_err"],
-            "ok": not checks["frame_mismatch"] and checks["eef_residual_max"] < 1e-4,
+            # leader 目标 vs 下一帧 follower 实测:遥操作有跟随滞后,仅落盘不参与 ok 判定
+            "eef_action_state_gap_max": checks["eef_action_state_gap_max"],
+            "eef_euler_abs_max": checks["eef_euler_abs_max"],
+            "eef_gripper_err_max": checks["eef_gripper_err_max"],
+            "ok": (not checks["frame_mismatch"]
+                   and checks["eef_euler_abs_max"] <= np.pi + 1e-6
+                   and checks["eef_gripper_err_max"] < 1e-6),
             "path": str(out),
         }
         (out / "meta" / "validation_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))

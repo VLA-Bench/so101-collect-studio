@@ -20,9 +20,15 @@
    - `Space` 开始/暂停录制,`Enter` 保存,`Backspace` 舍弃(录制中)/ 标废(历史页)
    - `←/→` 翻书浏览历史,`End` 回 LIVE,`G` 跳转,`T` 轮换任务,`E` 急停,`?` 帮助
    - 保存后台自动编码 mp4,可立刻录下一集;舍弃 = 删暂存目录,零成本
-4. **④ 导出 v2.1**:录制先保存与版本无关的内部原始 episode(不是 v3),勾选任务/批次后直接生成 v2.1,没有 v3 → v2.1 转换。导出时自动注入
-   `observation.state.eef: float32[7]`(TCP 绝对位姿 [x,y,z,qw,qx,qy,qz],基座系,FK 自 so101_new_calib.urdf 的 gripper_frame_link)与
-   `action.eef: float32[7]`(相邻帧增量,dq = q_{t+1}⊗q_t⁻¹,末帧 [0,0,0,1,0,0,0],四元数半球对齐),并生成校验报告。
+4. **④ 导出 v2.1**:录制先保存与版本无关的内部原始 episode(不是 v3),勾选任务/批次后直接生成 v2.1,没有 v3 → v2.1 转换。
+   导出层的列命名与 EEF 格式**与 so101-nexus 仿真采集完全一致**(2026-07-18 统一改造;内部原始 parquet 列名不变,老 episode 仍可导出):
+   - 关节列 `observation.pos_state` / `pos_action`:`float32[6]`,归一化值。
+   - EEF 列 `observation.eef_state` / `eef_action`:`float32[7]`,均为**绝对位姿**
+     `[x, y, z, roll, pitch, yaw, gripper]`,基座系,FK 自 `so101_new_calib.urdf` 的 `gripper_frame_link`。
+     `eef_state` = FK(follower 关节),`eef_action` = **FK(leader action 关节)**(不是相邻帧增量,也不再从 state 序列差分)。
+     欧拉角为 RPY(extrinsic xyz),`R = Rz(yaw)·Ry(pitch)·Rx(roll)`,取值 `[-π, π]`;
+     gripper 通道与该数据集关节第 6 维同值同单位(0–100 归一化)。
+   - 同时生成 GR00T `meta/modality.json`(所有条目显式写 `original_key`)与校验报告 `meta/validation_report.json`。
 
 ## 数据目录
 
