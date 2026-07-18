@@ -1,0 +1,25 @@
+[project]
+name = "collect-studio"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "lerobot[feetech]",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2",
+    "opencv-python-headless>=4.10",
+    "numpy>=2",
+    "pyarrow>=17",
+    "pyserial>=3.5",
+    "pyyaml>=6",
+    "pyobjc-framework-avfoundation>=10",
+    "pyobjc-framework-quartz>=10",
+    "pyobjc-framework-coremedia>=10",
+    "pyobjc-framework-libdispatch>=10",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+lerobot = { path = "third_party/lerobot", editable = true }
