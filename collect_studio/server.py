@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from . import config_store, exporter, library
 from .arms import ArmManager
 from .cams import CamManager
-from .paths import STATIC
+from .paths import ASSETS, STATIC
 from .recorder import RecordService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -97,6 +97,18 @@ def cams_start_all():
 def cams_start_bound():
     cams.start_bound()
     return cams.status()
+
+
+class StartUidReq(BaseModel):
+    unique_id: str
+
+
+@app.post("/api/cams/start_uid")
+def cams_start_uid(req: StartUidReq):
+    try:
+        return cams.start_uid(req.unique_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 class BindReq(BaseModel):
@@ -265,3 +277,11 @@ def export_status():
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/assets/{name}")
+def asset(name: str):
+    p = (ASSETS / name).resolve()
+    if p.parent != ASSETS.resolve() or not p.is_file():
+        raise HTTPException(404, name)
+    return FileResponse(p)

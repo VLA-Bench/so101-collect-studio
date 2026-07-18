@@ -116,13 +116,30 @@ class CamManager:
         if s is None:
             self.streams[uid] = CamStream(uid, rec["width"], rec["height"], rec["fps"])
 
-    def start_all(self):
-        """打开全部枚举到的相机(含内置,供绑定页预览用)。"""
+    def start_all(self, include_builtin: bool = False):
+        """打开枚举到的相机供绑定页预览。
+
+        默认跳过内置相机 —— 不占用设备、不点亮摄像头指示灯。只有当内置相机
+        已被手动绑定到角色时才照常打开(说明是有意使用/识别纠错后的结果)。
+        需要临时查看某台内置相机画面时走 start_uid 按需单开。
+        """
         rec = config_store.load()["record"]
+        bound = {uid for uid in config_store.load()["cameras"].values() if uid}
         devices = self.devices(refresh=True)
         with self.lock:
             for c in devices:
+                if c["builtin"] and not include_builtin and c["unique_id"] not in bound:
+                    continue
                 self._sync_stream(c["unique_id"], rec)
+
+    def start_uid(self, uid: str):
+        """按需打开单台相机(供内置相机手动预览:识别存疑时先看画面再决定绑定)。"""
+        rec = config_store.load()["record"]
+        if uid not in {d["unique_id"] for d in self.devices()}:
+            raise ValueError("设备未检测到,请先『重新识别相机』")
+        with self.lock:
+            self._sync_stream(uid, rec)
+        return self.status()
 
     def start_bound(self):
         """只打开绑定了角色的三台相机(采集时用,减少带宽)。"""
