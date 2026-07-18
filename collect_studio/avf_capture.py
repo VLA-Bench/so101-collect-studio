@@ -52,8 +52,8 @@ class _SampleSink(NSObject):
             finally:
                 CV.CVPixelBufferUnlockBaseAddress(img, _LOCK_READONLY)
             owner._on_frame(frame)
-        except Exception:  # noqa: BLE001  回调在 dispatch 线程,绝不能抛
-            pass
+        except Exception as e:  # noqa: BLE001  回调在 dispatch 线程,绝不能抛
+            owner._on_callback_error(e)
 
 
 class AVFCamStream:
@@ -68,18 +68,26 @@ class AVFCamStream:
         self.ok = False
         self.err: str | None = None
         self._lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
         self._session = None
         self._sink = None
         self._queue = None
         self._stopped = False
-        try:
-            self._start()
-        except Exception as e:  # noqa: BLE001
-            log.exception("AVF start failed for %s", unique_id)
-            self.err = f"启动采集失败:{e}"
+        self._start_thread = threading.Thread(
+            target=self._start_safe, name=f"camera-start-{unique_id}", daemon=True)
+        self._start_thread.start()
         threading.Thread(target=self._watchdog, daemon=True).start()
 
     # ---------- 内部 ----------
+    def _start_safe(self):
+        try:
+            self._start()
+        except Exception as e:  # noqa: BLE001
+            log.exception("AVF start failed for %s", self.unique_id)
+            with self._lock:
+                if not self._stopped:
+                    self.err = f"启动采集失败:{e}"
+
     def _start(self):
         dev = AVF.AVCaptureDevice.deviceWithUniqueID_(self.unique_id)
         if dev is None:
@@ -103,7 +111,8 @@ class AVFCamStream:
         out.setVideoSettings_({CV.kCVPixelBufferPixelFormatTypeKey: CV.kCVPixelFormatType_32BGRA})
         out.setAlwaysDiscardsLateVideoFrames_(True)
         self._sink = _SampleSink.alloc().initWithOwner_(self)
-        self._queue = libdispatch.dispatch_queue_create(b"collect-studio.cam", None)
+        self._queue = libdispatch.dispatch_queue_create(
+            f"collect-studio.cam.{self.unique_id}".encode(), None)
         out.setSampleBufferDelegate_queue_(self._sink, self._queue)
         if not session.canAddOutput_(out):
             session.commitConfiguration()
@@ -120,8 +129,14 @@ class AVFCamStream:
                 dev.unlockForConfiguration()
         except Exception:  # noqa: BLE001
             pass
+        if self._stopped:
+            return
         session.startRunning()
-        self._session = session
+        with self._lifecycle_lock:
+            if self._stopped:
+                session.stopRunning()
+            else:
+                self._session = session
 
     def _on_frame(self, frame):
         if self._stopped:
@@ -134,6 +149,11 @@ class AVFCamStream:
             self.frame_count += 1
             self.ok = True
             self.err = None
+
+    def _on_callback_error(self, error):
+        with self._lock:
+            if not self._stopped and not self.ok:
+                self.err = f"读取画面失败:{error}"
 
     def _watchdog(self):
         """3 秒收不到帧标记为异常(权限/占用/拔出),恢复后自动转好。"""
@@ -159,12 +179,13 @@ class AVFCamStream:
         return buf.tobytes() if ok else None
 
     def stop(self):
-        self._stopped = True
+        with self._lifecycle_lock:
+            self._stopped = True
+            session, self._session = self._session, None
         try:
-            if self._session is not None:
-                self._session.stopRunning()
+            if session is not None:
+                session.stopRunning()
         except Exception:  # noqa: BLE001
             pass
         if self._sink is not None:
             self._sink._owner = None
-        self._session = None

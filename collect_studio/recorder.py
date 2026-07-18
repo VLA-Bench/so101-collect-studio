@@ -22,6 +22,9 @@ from .paths import LIBRARY, STAGING
 log = logging.getLogger("recorder")
 
 FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+CAMERA_READY_TIMEOUT = 10.0
+CAMERA_RETRY_AFTER = 2.0
+CONTROL_READY_TIMEOUT = 3.0
 
 
 class JpegWriter:
@@ -78,6 +81,8 @@ class RecordService:
         self.encode_q: list[dict] = []  # 保存后待编码队列(展示用)
         self._lock = threading.RLock()
         self._stop = threading.Event()
+        self._loop_ready = threading.Event()
+        self._loop_error: str | None = None
         self._thread: threading.Thread | None = None
         self.last_error: str | None = None
 
@@ -96,39 +101,59 @@ class RecordService:
         threading.Thread(target=self._start_teleop_worker, daemon=True).start()
 
     def _start_teleop_worker(self):
+        torque_enabled = False
         try:
             t0 = time.perf_counter()
             self.teleop_phase = "打开相机流…"
             self.cams.start_bound()
-            deadline = time.time() + 8
-            while time.time() < deadline and not self._cancel_start:
-                streams = [self.cams.stream_for_role(r) for r in ROLES]
-                ready = [s for s in streams if s and s.ok]
-                self.teleop_phase = f"等待相机就绪 {len(ready)}/3…"
-                if len(ready) == 3:
+            deadline = time.monotonic() + CAMERA_READY_TIMEOUT
+            retry_at = time.monotonic() + CAMERA_RETRY_AFTER
+            retried = False
+            while time.monotonic() < deadline and not self._cancel_start:
+                health = self.cams.bound_health()
+                self.teleop_phase = f"等待相机就绪 {health['ready']}/{health['total']}…"
+                if health["ready"] == health["total"]:
                     break
+                if not retried and time.monotonic() >= retry_at:
+                    self.teleop_phase = "重试未就绪相机…"
+                    self.cams.retry_failed_bound()
+                    retried = True
                 time.sleep(0.2)
             else:
                 if not self._cancel_start:
-                    bad = [r for r in ROLES if not ((s := self.cams.stream_for_role(r)) and s.ok)]
-                    raise RuntimeError(f"相机未就绪:{','.join(bad)}(检查绑定与摄像头权限)")
+                    problems = self.cams.bound_health()["problems"]
+                    detail = ", ".join(f"{role}({reason})" for role, reason in problems.items())
+                    raise RuntimeError(f"相机未就绪:{detail}")
             t1 = time.perf_counter()
             if self._cancel_start:
                 return
             self.teleop_phase = "从动臂上力矩…"
             self.arms.enable_torque()
+            torque_enabled = True
             t2 = time.perf_counter()
             if self._cancel_start:
                 self.arms.estop()
                 return
             self.teleop_phase = "启动 30Hz 控制环…"
             self._stop.clear()
+            self._loop_ready.clear()
+            self._loop_error = None
             self._thread = threading.Thread(target=self._loop, daemon=True)
-            self.teleop_on = True
             self._thread.start()
+            if not self._loop_ready.wait(CONTROL_READY_TIMEOUT):
+                raise RuntimeError("30Hz 控制环未在 3 秒内就绪")
+            if self._loop_error:
+                raise RuntimeError(self._loop_error)
+            if self._cancel_start:
+                self.arms.estop()
+                return
+            self.teleop_on = True
             log.info("teleop started: cams %.2fs, torque %.2fs", t1 - t0, t2 - t1)
         except Exception as e:  # noqa: BLE001
             log.exception("start_teleop failed")
+            self._stop.set()
+            if torque_enabled:
+                self.arms.estop()
             self.last_error = f"遥操作启动失败:{e}"
         finally:
             self.teleop_starting = False
@@ -157,11 +182,14 @@ class RecordService:
                 action = self.arms.leader.get_action()
                 self.arms.follower.send_action(action)
                 obs = self.arms.follower.bus.sync_read("Present_Position")
+                self._loop_ready.set()
                 if self.state == "rec":
                     self._capture_frame(obs, action, period)
             except Exception as e:  # noqa: BLE001
                 log.exception("teleop loop error")
-                self.last_error = f"控制环异常:{e}"
+                self._loop_error = f"控制环异常:{e}"
+                self.last_error = self._loop_error
+                self._loop_ready.set()
                 self.arms.estop()
                 self.teleop_on = False
                 if self.state != "idle":

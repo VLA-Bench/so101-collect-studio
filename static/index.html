@@ -340,7 +340,7 @@
   <!-- ========== STEP 4 ========== -->
   <div class="step" id="step4">
     <h2>导出 v2.1 数据集</h2>
-    <div class="sub">按任务/批次勾选组合打包。打包是纯读操作,原始 episode 不动,可反复导出。EEF 字段(TCP 绝对位姿 + 相邻帧增量)在导出时注入。</div>
+    <div class="sub">录制保存的是内部原始 episode,不是 v3;这里直接生成 v2.1,不存在 v3 → v2.1 转换。打包是纯读操作,原始 episode 不动,可反复导出;EEF 字段(TCP 绝对位姿 + 相邻帧增量)在导出时注入。</div>
     <div class="exp-grid">
       <div class="card">
         <b style="display:block;margin-bottom:10px">选择数据</b>
@@ -405,6 +405,38 @@ const api = async (path, opts={}) => {
 };
 const post = (path, body) => api(path, {method:'POST', body: body?JSON.stringify(body):undefined});
 
+// 相机预览使用可取消的单帧请求,避免 MJPEG 长连接在切页后占满浏览器连接槽。
+const previews = {generation:0, controllers:new Set(), urls:new Map()};
+function stopPreviews(){
+  previews.generation++;
+  previews.controllers.forEach(c=>c.abort()); previews.controllers.clear();
+  previews.urls.forEach(url=>URL.revokeObjectURL(url)); previews.urls.clear();
+  document.querySelectorAll('img[data-preview-url]').forEach(img=>img.removeAttribute('src'));
+}
+function startPreviews(root){
+  stopPreviews();
+  const generation=previews.generation;
+  root.querySelectorAll('img[data-preview-url]').forEach(img=>refreshPreview(img,generation));
+}
+async function refreshPreview(img,generation){
+  const controller=new AbortController(); previews.controllers.add(controller);
+  try{
+    const r=await fetch(img.dataset.previewUrl,{signal:controller.signal,cache:'no-store'});
+    if(r.status===204) return;
+    if(!r.ok) throw new Error(r.statusText);
+    const blob=await r.blob();
+    if(generation!==previews.generation || !img.isConnected) return;
+    const old=previews.urls.get(img), url=URL.createObjectURL(blob);
+    previews.urls.set(img,url); img.src=url;
+    if(old) URL.revokeObjectURL(old);
+  }catch(e){ if(e.name!=='AbortError') img.dataset.previewError=e.message; }
+  finally{
+    previews.controllers.delete(controller);
+    if(generation===previews.generation && img.isConnected)
+      setTimeout(()=>refreshPreview(img,generation),100);
+  }
+}
+
 function toast(msg, cls=''){
   const d=document.createElement('div'); d.className='toast '+cls; d.textContent=msg;
   $('toasts').appendChild(d);
@@ -421,23 +453,21 @@ const S = {
   curTask: localStorage.getItem('curTask') || null,
   lastErr: null,
   playing: true,
-  camsStarted: false,
 };
 const liveIdx = () => S.eps.length;
 const onLive = () => S.page === 'live' || S.page >= liveIdx();
 
 /* ================= step 切换 ================= */
 function gotoStep(n){
-  // 关键:离开页面时必须拆掉 MJPEG <img> / <video>,否则连接一直占着,
-  // 浏览器同源并发上限(6)被吃满后,后续请求(如连接机械臂)会无限排队。
+  if(S.step!==n) stopPreviews();
   if(S.step===2 && n!==2) $('cams').innerHTML='';
   if(S.step===3 && n!==3) $('feeds').innerHTML='';
   S.step = n;
   document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
   $('step'+n).classList.add('active');
   document.querySelectorAll('nav .tab').forEach(t=>t.classList.toggle('active',+t.dataset.step===n));
-  if(n===2){ post('/api/cams/start_all').then(()=>api('/api/status')).then(st=>{S.status=st;renderCams();}).catch(e=>toast(e.message,'r')); }
-  if(n===3){ post('/api/cams/start_bound').catch(()=>{}); refreshEpisodes(true); }
+  if(n===2){ post('/api/cams/start_all').then(()=>api('/api/status')).then(st=>{if(S.step!==2)return; S.status=st;renderCams();}).catch(e=>toast(e.message,'r')); }
+  if(n===3){ post('/api/cams/start_bound').catch(e=>toast('相机启动失败:'+e.message,'r')); refreshEpisodes(true); }
   if(n===4){ renderExport(); }
 }
 document.querySelectorAll('nav .tab').forEach(t=>t.onclick=()=>gotoStep(+t.dataset.step));
@@ -551,6 +581,7 @@ function estop(){ post('/api/arms/estop').then(()=>toast('⏻ 急停:遥操作�
 /* ================= step2 相机 ================= */
 function renderCams(){
   const st=S.status; if(!st) return;
+  stopPreviews();
   const wrap=$('cams'); wrap.innerHTML='';
   const roleNames={wrist:'腕部 wrist',left_rear:'左后 left_rear',right_rear:'右后 right_rear'};
   for(const d of st.cams.devices){
@@ -559,11 +590,12 @@ function renderCams(){
     const roles = `<div class="roles">${Object.keys(roleNames).map(r=>
         `<button data-uid="${d.unique_id}" data-role="${r}" class="${d.role===r?'sel':''}">${roleNames[r]}</button>`).join('')}
       <button data-unbind="${d.role||''}" title="解除此相机的角色" ${d.role?'':'disabled'} style="flex:0 0 40px">✕</button></div>`;
-    card.innerHTML=`<img src="/stream/uid/${encodeURIComponent(d.unique_id)}.mjpg">
+    card.innerHTML=`<img data-preview-url="/frame/uid/${encodeURIComponent(d.unique_id)}.jpg" alt="${d.name} 实时画面">
       <div class="nm">${d.name} <span class="chip">index ${d.index}</span>${d.builtin?' <span class="chip warn">内置</span>':''}${d.role?` <span class="chip saved">${d.role}</span>`:''}</div>
       <div class="uid">uniqueID ${d.unique_id}</div>${roles}`;
     wrap.appendChild(card);
   }
+  startPreviews(wrap);
   const bound=Object.values(st.cams.binding).filter(Boolean).length;
   $('cam-status').textContent=`已绑定 ${bound} / 3 个角色` + (st.cams.missing.length? ` · 缺失:${st.cams.missing.join(',')}`:'');
 }
@@ -585,8 +617,9 @@ $('cams').addEventListener('click',async e=>{
     toast(`已绑定 ${b.dataset.role}`,'g');
   }catch(err){ toast(err.message,'r'); }
 });
-$('to3').onclick=async()=>{ await post('/api/cams/start_bound').catch(()=>{}); toast('相机绑定已保存(uniqueID)','g'); gotoStep(3); };
+$('to3').onclick=()=>{ toast('相机绑定已保存(uniqueID)','g'); gotoStep(3); };
 $('cam-refresh').onclick=async()=>{
+  stopPreviews();
   $('cams').innerHTML='';  // 先拆掉旧流,避免占用连接
   try{
     await post('/api/cams/start_all');
@@ -630,16 +663,18 @@ const FEED_LAYOUT=[['wrist','wrist'],['left_rear',''],['right_rear','']];
 function renderDeck(){
   const live=onLive();
   const feeds=$('feeds');
+  stopPreviews();
   if(live){
     S.page='live';
     $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
     $('pagemeta').textContent='task: '+(curTask()?.slug||'—');
     feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
-      `<div class="feed ${cls}"><img src="/stream/role/${r}.mjpg"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
+      `<div class="feed ${cls}"><img data-preview-url="/frame/role/${r}.jpg" alt="${r} 实时画面"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
       +`<div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>`
       +`<div class="prompt-ov">“${curTask()?.prompt||''}”</div>`;
     $('scrub-row').style.display='none'; $('live-ctrl').style.display='flex';
     $('trash-btn').style.display='none'; $('golive-btn').style.display='none';
+    startPreviews(feeds);
     renderLiveCtrl();
   }else{
     const e=S.eps[S.page];
@@ -756,7 +791,7 @@ $('teleop-btn').onclick=async()=>{
       await post('/api/teleop/stop');
       toast('遥操作已停止(力矩保持,松臂用急停 E)');
     }else{
-      tb.innerHTML='<span class="spin">◌</span> 启动中…';
+      tb.innerHTML='<span class="spin">◌</span> 打开相机流…';
       await post('/api/teleop/start');  // 立即返回,进度看按钮上的阶段文字
     }
   }catch(e){ toast(e.message,'r'); tb.disabled=false; }
@@ -764,6 +799,7 @@ $('teleop-btn').onclick=async()=>{
 async function recToggle(){
   const rec=S.status?.rec; if(!rec) return;
   if(!onLive()) flipTo('live','r');
+  if(rec.starting) return toast('遥操作正在启动中,请稍候几秒','a');
   try{
     if(rec.state==='rec') await post('/api/rec/pause');
     else{

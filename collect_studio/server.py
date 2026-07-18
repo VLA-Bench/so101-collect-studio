@@ -1,11 +1,10 @@
-"""FastAPI 服务:REST 控制 + MJPEG 预览流 + 静态前端。"""
-import asyncio
+"""FastAPI 服务:REST 控制 + 可取消的相机单帧预览 + 静态前端。"""
 import logging
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import config_store, exporter, library
@@ -119,28 +118,21 @@ def cams_unbind(req: UnbindReq):
     return cams.unbind(req.role)
 
 
-async def _mjpeg(get_jpeg, fps=12):
-    boundary = b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-    period = 1.0 / fps
-    while True:
-        buf = get_jpeg()
-        if buf:
-            yield boundary + str(len(buf)).encode() + b"\r\n\r\n" + buf + b"\r\n"
-        await asyncio.sleep(period)
+def _frame_response(stream):
+    buf = stream.latest_jpeg() if stream else None
+    if not buf:
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    return Response(buf, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
-@app.get("/stream/role/{role}.mjpg")
-async def stream_role(role: str):
-    return StreamingResponse(
-        _mjpeg(lambda: (s := cams.stream_for_role(role)) and s.latest_jpeg()),
-        media_type="multipart/x-mixed-replace; boundary=frame")
+@app.get("/frame/role/{role}.jpg")
+def frame_role(role: str):
+    return _frame_response(cams.stream_for_role(role))
 
 
-@app.get("/stream/uid/{uid}.mjpg")
-async def stream_uid(uid: str):
-    return StreamingResponse(
-        _mjpeg(lambda: (s := cams.stream_for_uid(uid)) and s.latest_jpeg()),
-        media_type="multipart/x-mixed-replace; boundary=frame")
+@app.get("/frame/uid/{uid}.jpg")
+def frame_uid(uid: str):
+    return _frame_response(cams.stream_for_uid(uid))
 
 
 # ============ 遥操作 / 录制 ============
