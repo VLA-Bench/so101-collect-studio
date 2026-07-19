@@ -6,6 +6,7 @@
 """
 import logging
 import threading
+import time
 
 import cv2
 
@@ -107,9 +108,13 @@ class CamManager:
 
     # ---------- 流 ----------
     def _sync_stream(self, uid: str, rec: dict):
-        """确保 uid 的流存在;首帧失败或运行中断流都重建。"""
+        """确保 uid 的流存在;运行中断流或长期起不来才重建。
+
+        新流内部自带串行启动 + 首帧重试(3 次 × ~3s),期间 err 只是
+        "等待首帧",不能据此杀掉重建 —— 加 12s 年龄保护,只重建确认僵死的流。
+        """
         s = self.streams.get(uid)
-        if s and not s.ok and s.err:
+        if s and not s.ok and s.err and time.time() - getattr(s, "started_at", 0) > 12:
             s.stop()
             del self.streams[uid]
             s = None
