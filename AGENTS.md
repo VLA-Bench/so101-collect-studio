@@ -64,7 +64,7 @@ uv run python -m unittest discover -s tests -v   # 运行测试(标准库 unitte
 
 ## 硬性边界与安全约定（改代码必须遵守）
 
-1. **LeRobot 边界**（源自 `CLAUDE.md`，仍然有效）：
+1. **LeRobot 边界**：
    - `import lerobot` 只允许出现在 `collect_studio/arms.py`；其他模块必须经 `ArmManager` 获取机械臂能力。
    - exporter 只对齐数据格式，**不得** import lerobot。
 2. **绝不触碰舵机校准**：代码中没有任何调用 `calibrate()` 的路径，`connect` 一律 `calibrate=False`。不要新增重校准入口。
@@ -76,7 +76,14 @@ uv run python -m unittest discover -s tests -v   # 运行测试(标准库 unitte
 
 - `third_party/lerobot` 通过 git subtree 引入。修改它的 commit message 必须用 `[lerobot]` 前缀，且不得与业务改动混在同一 commit。
 - 每项本地修改必须登记到 `docs/lerobot-patches.md`（表格：日期 / 文件 / 原因 / 可否回馈上游）。当前表为空 = 暂无本地 patch。
-- 升级上游流程见 `CLAUDE.md`（`git subtree pull --squash` → 解冲突 → 冒烟 → 真机验证 teleop/录制/导出）。
+- 升级上游流程：
+
+```bash
+git remote add lerobot-seeed https://github.com/Seeed-Projects/lerobot.git   # 或 HF 官方
+git fetch lerobot-seeed <branch-or-tag>
+git subtree pull --prefix third_party/lerobot lerobot-seeed <ref> --squash
+# 解冲突 → 冒烟 → 真机验证 teleop/录制/导出
+```
 
 ## 测试
 
