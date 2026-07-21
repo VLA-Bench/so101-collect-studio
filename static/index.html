@@ -23,6 +23,7 @@
   button.ok{background:#0e2b1a;border-color:#2b7a45;color:#7fe0a4}
   button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
   input[type=text],input[type=number]{background:#0d1220;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:7px 10px;font:inherit;width:100%}
+  select{background:#0d1220;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:6px 8px;font:inherit;width:100%}
   input:focus{outline:none;border-color:var(--accent)}
 
   header{display:flex;align-items:center;gap:18px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
@@ -90,8 +91,15 @@
   .task:hover{border-color:#3a4a68}
   .task.sel{border-color:var(--accent);background:#12233299}
   .task .prompt{font-size:13px;line-height:1.4}
-  .task .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .tid{color:var(--dim);font-family:var(--mono);font-size:11px}
+  .task .meta{display:flex;gap:8px;font-size:11px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .task .meta b{color:var(--green)}
   .task.sel .meta b{color:var(--accent)}
+  .tgrp{font-size:11px;color:var(--dim);margin:6px 0 5px;font-family:var(--mono);display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .tgrp .tfold{flex:none;padding:1px 8px;font-size:11px}
+  .tgrp-btns{display:flex;align-items:center;gap:4px;flex:none}
+  .tgrp .tsort{padding:1px 5px;font-size:10px;line-height:1.3}
+  .tfold{flex:1;padding:5px;font-size:12px}
   .addtask{display:flex;gap:6px;margin-top:4px}
   .addtask button{padding:7px 10px;flex:none}
   .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
@@ -149,10 +157,39 @@
   .cell.live{width:52px;border-color:var(--red);color:var(--red);font:10px var(--mono);display:flex;align-items:center;justify-content:center;background:#2a1218}
   .strip .lbl{font:10px var(--mono);color:var(--dim);margin-right:4px;flex:none}
 
-  .exp-grid{display:grid;grid-template-columns:380px 1fr;gap:16px;max-width:1200px}
-  .pick{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:13px}
-  .pick input{width:auto}
-  .pick .cnt{margin-left:auto;font:11px var(--mono);color:var(--dim)}
+  /* step4 数据管理器:左树 / 中列表 / 右报告 */
+  .mgr{display:grid;grid-template-columns:250px minmax(0,1fr) 330px;gap:14px;height:calc(100% - 84px);min-height:0}
+  .mgr .card{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .mgr-tree{flex:1;overflow-y:auto}
+  .tnode{padding:5px 8px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;border:1px solid transparent}
+  .tnode:hover{background:var(--panel2)}
+  .tnode.sel{background:#12233299;border-color:var(--accent)}
+  .tnode .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tnode .cnt{margin-left:auto;flex:none;font:11px var(--mono);color:var(--dim)}
+  .tnode.l2{margin-left:16px;font-size:12.5px}
+  .tnode.l3{margin-left:32px;font-size:12px;color:var(--dim)}
+  .tnode .caret{flex:none;width:14px;color:var(--dim);font-size:10px}
+  .mgr-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex:none}
+  .mgr-bar .spacer{flex:1}
+  .mgr-bar button{font-size:12px;padding:4px 10px}
+  .mgr-eps{flex:1;overflow-y:auto;min-height:0}
+  .mrow{display:flex;align-items:center;gap:10px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:12.5px}
+  .mrow.trashed{opacity:.55}
+  .mrow input{flex:none}
+  .mrow .mid{font-family:var(--mono);flex:none}
+  .mrow .mmeta{flex:none;font:11px var(--mono);color:var(--dim)}
+  .mrow .mtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+  .mrow .mact{display:flex;gap:5px;flex:none}
+  .mrow .mact button{padding:3px 8px;font-size:12px}
+  .mgr-export{flex:none;display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid var(--line);margin-top:8px;flex-wrap:wrap}
+  .mgr-export input[type=text]{width:200px;flex:none}
+  #exp-total{font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .mpv-grid{display:grid;grid-template-columns:1.45fr 1fr;grid-template-rows:1fr 1fr;gap:8px;height:58vh}
+  .mpv-grid .cellv{position:relative;background:#000;border-radius:8px;overflow:hidden}
+  .mpv-grid .cellv:first-child{grid-row:1/3}
+  .mpv-grid video{width:100%;height:100%;object-fit:contain;display:block}
+  .mpv-grid .tag{position:absolute;left:8px;bottom:6px;font:11px var(--mono);color:#c6ffd9;background:#000a;padding:1px 8px;border-radius:4px}
+  textarea{background:#0d1220;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font:inherit;width:100%;resize:vertical}
   pre.json{background:#0d1220;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12px/1.7 var(--mono);color:#9fd0ff;overflow:auto;max-height:400px}
   .progress{height:6px;background:#0d1220;border-radius:3px;overflow:hidden;flex:1;min-width:120px}
   .progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
@@ -288,10 +325,13 @@
       </section>
       <section>
         <h3>任务(<kbd>T</kbd> 轮换)</h3>
+        <select id="taskset-sel" style="margin-bottom:6px"></select>
         <div id="tasklist"></div>
         <div class="addtask">
           <input type="text" id="newtask" placeholder="新任务提示词…">
           <button id="addtask-btn">＋</button>
+          <button id="importtask-btn" title="从 tasks.jsonl 批量导入任务">导入</button>
+          <input type="file" id="importtask-file" accept=".jsonl" hidden>
         </div>
       </section>
       <section>
@@ -351,25 +391,33 @@
 
   <!-- ========== STEP 4 ========== -->
   <div class="step" id="step4">
-    <h2>导出 v2.1 数据集</h2>
-    <div class="sub">录制保存的是内部原始 episode,不是 v3;这里直接生成 v2.1,不存在 v3 → v2.1 转换。打包是纯读操作,原始 episode 不动,可反复导出;EEF 字段(TCP 绝对位姿 + 相邻帧增量)在导出时注入。</div>
-    <div class="exp-grid">
+    <h2>数据管理与导出 v2.1</h2>
+    <div class="sub">按「任务 → 批次 → episode」自由浏览全部数据(含回收站):预览、改提示词、标废/恢复、彻底删除。勾选要导出的 episode(<b>一个不勾 = 导出全部已保存</b>),打包为 LeRobot v2.1 + EEF;打包是纯读操作,原始 episode 不动,可反复导出。</div>
+    <div class="mgr">
       <div class="card">
-        <b style="display:block;margin-bottom:10px">选择数据</b>
-        <div id="exp-picks"><span style="color:var(--dim);font-size:13px">暂无已保存 episode</span></div>
-        <div style="margin:12px 0 6px;font-size:13px;color:var(--dim)">数据集名称</div>
-        <input type="text" id="exp-name" value="so101_dataset_v21">
-        <div class="steprow">
-          <button class="primary" style="flex:1" id="export-btn">打包为 v2.1 + EEF</button>
+        <b style="display:block;margin-bottom:10px;flex:none">数据库</b>
+        <div class="mgr-tree" id="mgr-tree"></div>
+      </div>
+      <div class="card">
+        <div class="mgr-bar">
+          <b id="mgr-path">全部已保存</b>
+          <span class="spacer"></span>
+          <button id="mgr-all">全选本节点</button>
+          <button id="mgr-none">全不选</button>
         </div>
-        <div class="steprow">
+        <div class="mgr-eps" id="mgr-eps"></div>
+        <div class="mgr-export">
+          <input type="text" id="exp-name" value="so101_dataset_v21" title="数据集名称">
+          <button class="primary" id="export-btn">打包为 v2.1 + EEF</button>
           <div class="progress"><i id="exp-bar"></i></div>
           <span id="exp-msg" style="font-size:12.5px;color:var(--dim)"></span>
+          <span class="spacer"></span>
+          <span id="exp-total"></span>
         </div>
       </div>
       <div class="card">
-        <b style="display:block;margin-bottom:10px">校验报告</b>
-        <pre class="json" id="exp-report">尚未导出</pre>
+        <b style="display:block;margin-bottom:10px;flex:none">校验报告</b>
+        <pre class="json" id="exp-report" style="flex:1;max-height:none">尚未导出</pre>
       </div>
     </div>
   </div>
@@ -402,6 +450,25 @@
   <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
     <button onclick="closeModals()">取消</button>
     <button class="primary" id="jump-go">跳转</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="mpv-bg"><div class="modal" style="max-width:920px;width:92vw">
+  <h3 id="mpv-title">预览</h3>
+  <div class="mpv-grid" id="mpv-vids"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:14px">
+    <button onclick="closeMpv()">关闭</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="med-bg"><div class="modal">
+  <h3>修改提示词 <span class="mono" id="med-id" style="color:var(--dim);font-size:12px"></span></h3>
+  <textarea id="med-prompt" rows="3"></textarea>
+  <div style="margin:10px 0 4px;font-size:13px;color:var(--dim)">同时归入任务(可选;选了会改 task_slug 并移动目录)</div>
+  <select id="med-task"></select>
+  <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+    <button onclick="closeModals()">取消</button>
+    <button class="primary" id="med-save">保存</button>
   </div>
 </div></div>
 
@@ -454,7 +521,7 @@ function toast(msg, cls=''){
   $('toasts').appendChild(d);
   setTimeout(()=>d.classList.add('out'),3200); setTimeout(()=>d.remove(),3800);
 }
-function closeModals(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+function closeModals(){ document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); if(window.stopMpv) stopMpv(); }
 
 /* ================= 全局状态 ================= */
 const S = {
@@ -463,10 +530,18 @@ const S = {
   eps: [],               // /api/episodes
   page: 'live',          // 'live' | 数字索引
   curTask: localStorage.getItem('curTask') || null,
+  taskSet: localStorage.getItem('taskSet') || '全部',   // 当前任务集合
+  taskDescDone: localStorage.getItem('taskDescDone')==='1', // 已采集组倒序
+  taskDescTodo: localStorage.getItem('taskDescTodo')==='1', // 未采集组倒序
+  taskExpandDone: localStorage.getItem('taskExpandDone')==='1', // 已采集组展开
+  taskExpandTodo: localStorage.getItem('taskExpandTodo')==='1', // 未采集组展开
+  mgrNode: {type:'all'},     // 导出页管理器当前节点 {type:'all'|'set'|'task'|'session'|'orphan'|'trash', key?, session?, set?}
+  mgrOpen: new Set(),        // 管理器里展开到批次的任务节点
+  expSel: new Set(),         // 管理器勾选导出的 episode id
   lastErr: null,
   playing: true,
 };
-const liveIdx = () => S.eps.length;
+const liveIdx = () => deckEps().length;   // deck 只翻当前任务集合的 episode(需求3)
 const onLive = () => S.page === 'live' || S.page >= liveIdx();
 
 /* ================= step 切换 ================= */
@@ -480,14 +555,43 @@ function gotoStep(n){
   document.querySelectorAll('nav .tab').forEach(t=>t.classList.toggle('active',+t.dataset.step===n));
   if(n===2){ post('/api/cams/start_all').then(()=>api('/api/status')).then(st=>{if(S.step!==2)return; S.status=st;renderCams();}).catch(e=>toast(e.message,'r')); }
   if(n===3){ post('/api/cams/start_bound').catch(e=>toast('相机启动失败:'+e.message,'r')); refreshEpisodes(true); }
-  if(n===4){ renderExport(); }
+  if(n===4){ refreshEpisodes(); }  // renderExport 由 refreshEpisodes 回调触发,保证数据新鲜
 }
 document.querySelectorAll('nav .tab').forEach(t=>t.onclick=()=>gotoStep(+t.dataset.step));
+
+/* ================= 录制提示音 ================= */
+/* Web Audio 合成,无需音频文件。状态变化驱动(轮询检测),覆盖键盘/按钮等所有触发路径 */
+let AC=null, lastRecState=null;
+function beep(freq,dur,delay=0){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended') AC.resume();
+    const t0=AC.currentTime+delay;
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.15,t0);
+    g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+    o.connect(g).connect(AC.destination);
+    o.start(t0); o.stop(t0+dur+0.02);
+  }catch(e){}
+}
+function sndStart(){ beep(660,0.12); beep(880,0.16,0.13); }  /* 上行两音:开始 */
+function sndStop(){ beep(880,0.12); beep(520,0.22,0.13); }   /* 下行两音:结束 */
+function checkRecSound(){
+  const st=S.status?.rec?.state;
+  if(st==null) return;
+  if(lastRecState!==null && st!==lastRecState){
+    if(st==='rec'&&lastRecState==='idle') sndStart();
+    else if(st==='idle'&&(lastRecState==='rec'||lastRecState==='paused')) sndStop();
+  }
+  lastRecState=st;
+}
 
 /* ================= 轮询 ================= */
 async function poll(){
   try{
     S.status = await api('/api/status');
+    checkRecSound();
     renderStatus();
   }catch(e){ $('foot-msg').textContent='后端连接断开…'; }
   setTimeout(poll, 500);
@@ -497,6 +601,7 @@ async function refreshEpisodes(jumpLive=false){
     S.eps = await api('/api/episodes');
     if(jumpLive) S.page='live';
     if(S.step===3) renderDeck();
+    if(S.step===4) renderExport();
   }catch(e){}
 }
 
@@ -551,6 +656,7 @@ function renderStatus(){
   const err = rec.error || arms.error;
   if(err && err!==S.lastErr){ toast(err,'r'); S.lastErr=err; }
   // 任务面板
+  renderSetSelectors();
   renderTasks();
   const s=st.stats||{};
   $('st-saved').textContent=s.saved??0;
@@ -658,28 +764,141 @@ $('cam-refresh').onclick=async()=>{
 /* ================= step3 deck ================= */
 function fmtT(s){ const m=Math.floor(s/60); return String(m).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0')+'.'+Math.floor(s*10%10); }
 
-function taskList(){ return (S.status?.tasks)||[]; }
-function curTask(){
-  const ts=taskList(); if(!ts.length) return null;
-  return ts.find(t=>t.slug===S.curTask) || ts[0];
+function taskList(){
+  const ts=(S.status?.tasks)||[];
+  if(!(S.taskSet&&S.taskSet!=='全部')) return ts;
+  // 新后端读 tasks_by_set(不去重;合并列表按 slug 去重会把重复任务标成先出现的集合);
+  // 字段缺失=后端未升级,降级为合并列表按 set 过滤,避免版本错配时列表空白
+  const bySet=S.status?.tasks_by_set;
+  return bySet? (bySet[S.taskSet]||[]) : ts.filter(t=>t.set===S.taskSet);
 }
-function renderTasks(){
-  const el=$('tasklist'); if(!el) return;
-  const per=(S.status?.stats?.per_task)||{};
-  const cur=curTask();
-  el.innerHTML='';
-  for(const t of taskList()){
-    const d=document.createElement('div'); d.className='task'+(cur&&t.slug===cur.slug?' sel':'');
-    d.innerHTML=`<div class="prompt">${t.prompt}</div><div class="meta"><span>${t.slug}</span><b>${per[t.slug]||0} 集</b></div>`;
-    d.onclick=()=>{ S.curTask=t.slug; localStorage.setItem('curTask',t.slug); renderTasks(); if(onLive()) renderDeck(); };
-    el.appendChild(d);
+/* 任务集合下拉:仅采集台使用(导出页管理器面向全部数据),集合列表随轮询热更新 */
+function renderSetSelectors(){
+  const sets=['全部',...((S.status?.task_sets)||[])];
+  if(!sets.includes(S.taskSet)){ S.taskSet='全部'; localStorage.setItem('taskSet',S.taskSet); }
+  for(const id of ['taskset-sel']){
+    const el=$(id); if(!el) continue;
+    const key=sets.join('|');
+    if(el.dataset.key!==key){
+      el.dataset.key=key;
+      el.innerHTML=sets.map(s=>`<option${s===S.taskSet?' selected':''}>${s}</option>`).join('');
+    }
   }
 }
+/* 任务身份 = (set, slug):相同 slug 在不同集合是不同任务。key 形式 "set::slug";
+   localStorage 里的旧值(纯 slug,无 ::)按 slug 首个匹配兜底 */
+const tkey=t=>(t.set||'默认')+'::'+t.slug;
+function curTask(){
+  const ts=taskList(); if(!ts.length) return null;
+  return ts.find(t=>tkey(t)===S.curTask) || ts.find(t=>t.slug===S.curTask) || ts[0];
+}
+/* deck(右侧预览/翻页/strip)只包含当前任务集合的 episode(需求3);
+   「全部」集合或集合为空时不过滤;按 (task_set, task_slug) 匹配,跨集合同 slug 不串 */
+function deckEps(){
+  if(!(S.taskSet&&S.taskSet!=='全部')) return S.eps;
+  const ts=taskList();
+  if(!ts.length) return S.eps;
+  const keys=new Set(ts.map(tkey));
+  return S.eps.filter(e=>keys.has((e.task_set||'默认')+'::'+e.task_slug));
+}
+/* 统一的任务切换入口:切任务后 deck 回 LIVE,避免页码跨任务错位 */
+function setCurTask(t){
+  S.curTask=tkey(t); localStorage.setItem('curTask',S.curTask);
+  S.page='live';
+  renderTasks(); if(S.step===3) renderDeck();
+}
+/* 任务排序:已采集(>0 集)在前,未采集在后,组内保持文件原顺序;
+   编号 #id = 任务在文件中的顺序号(i+1),固定唯一,不随采集进度重排 */
+function sortedTasks(){
+  const per=(S.status?.stats?.per_task)||{};
+  const ts=taskList().map((t,i)=>({t,i,n:per[(t.set||'默认')+'/'+t.slug]||0}));
+  ts.sort((a,b)=>((b.n>0)-(a.n>0))||a.i-b.i);
+  ts.forEach(x=>{x.id=x.i+1;});
+  return ts;
+}
+const TASK_FOLD_N=2;  /* 每组折叠时只显示前 2 个(正序/倒序均按显示顺序取前 2) */
+function renderTasks(){
+  const el=$('tasklist'); if(!el) return;
+  const cur=curTask();
+  const ts=sortedTasks();
+  // 切成「已采集/未采集」两组(组顺序固定:已采集在前)
+  const groups=[];
+  for(const x of ts){
+    const g=x.n>0;
+    if(!groups.length||groups[groups.length-1].g!==g) groups.push({g,items:[]});
+    groups[groups.length-1].items.push(x);
+  }
+  // 每组独立的正序/倒序(只翻转本组显示顺序;编号不变,仍是文件顺序号)
+  for(const grp of groups){ if(grp.g?S.taskDescDone:S.taskDescTodo) grp.items.reverse(); }
+  // 选中项变化时,若被所在组折叠隐藏则自动展开该组(保证 T 轮换可见);
+  // 只在 curTask 变化时执行——否则每次渲染都把用户的手动收起顶回去(已采集组无法收起的 bug)
+  const curKey=cur?tkey(cur):null;
+  if(curKey!==S._foldAutoKey){
+    S._foldAutoKey=curKey;
+    for(const grp of groups){
+      const expand=grp.g?S.taskExpandDone:S.taskExpandTodo;
+      if(!expand && grp.items.findIndex(x=>cur&&tkey(x.t)===curKey)>=TASK_FOLD_N){
+        if(grp.g) S.taskExpandDone=true; else S.taskExpandTodo=true;
+      }
+    }
+  }
+  el.innerHTML='';
+  for(const grp of groups){
+    const expand=grp.g?S.taskExpandDone:S.taskExpandTodo;
+    const desc=grp.g?S.taskDescDone:S.taskDescTodo;
+    const h=document.createElement('div'); h.className='tgrp';
+    const lbl=document.createElement('span');
+    lbl.textContent=`${grp.g?'已采集':'未采集'} (${grp.items.length})`;
+    h.appendChild(lbl);
+    // 组标题行右侧:展开/收起 + 本组正倒序迷你按钮
+    const btns=document.createElement('span'); btns.className='tgrp-btns';
+    if(grp.items.length>TASK_FOLD_N){
+      const f=document.createElement('button'); f.className='tfold';
+      f.textContent=expand?'收起 ▴':`展开其余 ${grp.items.length-TASK_FOLD_N} 个 ▾`;
+      f.onclick=()=>{
+        if(grp.g){ S.taskExpandDone=!S.taskExpandDone; localStorage.setItem('taskExpandDone',S.taskExpandDone?'1':''); }
+        else{ S.taskExpandTodo=!S.taskExpandTodo; localStorage.setItem('taskExpandTodo',S.taskExpandTodo?'1':''); }
+        renderTasks();
+      };
+      btns.appendChild(f);
+    }
+    const so=document.createElement('button'); so.className='tfold tsort';
+    so.textContent=desc?'▼':'▲';
+    so.title=desc?'本组倒序(点击切换为正序)':'本组正序(点击切换为倒序)';
+    so.onclick=()=>{
+      if(grp.g){ S.taskDescDone=!S.taskDescDone; localStorage.setItem('taskDescDone',S.taskDescDone?'1':''); }
+      else{ S.taskDescTodo=!S.taskDescTodo; localStorage.setItem('taskDescTodo',S.taskDescTodo?'1':''); }
+      renderTasks();
+    };
+    btns.appendChild(so);
+    h.appendChild(btns);
+    el.appendChild(h);
+    const vis=expand?grp.items:grp.items.slice(0,TASK_FOLD_N);
+    for(const x of vis){
+      const d=document.createElement('div'); d.className='task'+(cur&&tkey(x.t)===tkey(cur)?' sel':'');
+      // 集数放底行最左:prompt 长换行后仍可见
+      d.innerHTML=`<div class="prompt"><span class="tid">#${x.id}</span> ${x.t.prompt}</div><div class="meta"><b>${x.n} 集</b><span>${x.t.slug}</span></div>`;
+      d.onclick=()=>setCurTask(x.t);
+      el.appendChild(d);
+    }
+  }
+}
+$('taskset-sel').onchange=e=>{ S.taskSet=e.target.value; localStorage.setItem('taskSet',S.taskSet); S.page='live'; renderTasks(); if(S.step===3) renderDeck(); };
 $('addtask-btn').onclick=async()=>{
   const v=$('newtask').value.trim(); if(!v) return;
-  try{ const t=await post('/api/tasks',{prompt:v}); S.curTask=t.slug; localStorage.setItem('curTask',t.slug);
+  try{ const t=await post('/api/tasks',{prompt:v,set:S.taskSet==='全部'?null:S.taskSet});
+    S.curTask=tkey(t); localStorage.setItem('curTask',S.curTask);
     $('newtask').value=''; toast('新任务已创建:'+v,'g'); }
   catch(e){ toast(e.message,'r'); }
+};
+/* 导入 tasks.jsonl 到当前任务集合:识别 LeRobot meta/tasks.jsonl 的 task 字段,重复任务自动跳过 */
+$('importtask-btn').onclick=()=>$('importtask-file').click();
+$('importtask-file').onchange=async ev=>{
+  const f=ev.target.files[0]; ev.target.value=''; if(!f) return;
+  try{
+    const r=await post('/api/tasks/import',{content:await f.text(),set:S.taskSet==='全部'?null:S.taskSet});
+    toast(`任务导入完成:新增 ${r.added} 个`+(r.skipped?`,跳过 ${r.skipped} 个重复`:''),'g');
+  }catch(e){ toast(e.message,'r'); }
 };
 $('empty-trash').onclick=async()=>{
   if(!confirm('确认清空回收站?此操作不可恢复')) return;
@@ -694,7 +913,7 @@ function renderDeck(){
   if(live){
     S.page='live';
     $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
-    $('pagemeta').textContent='task: '+(curTask()?.slug||'—');
+    $('pagemeta').textContent='task: '+(curTask()? tkey(curTask()).replace('::','/') :'—');
     feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
       `<div class="feed ${cls}"><img data-preview-url="/frame/role/${r}.jpg" alt="${r} 实时画面"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
       +`<div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>`
@@ -704,7 +923,7 @@ function renderDeck(){
     startPreviews(feeds);
     renderLiveCtrl();
   }else{
-    const e=S.eps[S.page];
+    const e=deckEps()[S.page];
     if(!e){ S.page='live'; return renderDeck(); }
     $('pageind').innerHTML=`<b>${e.id}</b> <span style="color:var(--dim)">· 第 ${S.page+1} / ${liveIdx()+1} 页</span>`;
     $('pagechip').className='chip '+(e.status==='saved'?'saved':'trash');
@@ -742,14 +961,14 @@ $('play-btn').onclick=()=>{
   vs[0].paused? vs.forEach(v=>v.play()) : vs.forEach(v=>v.pause());
 };
 $('scrub').addEventListener('input',ev=>{
-  const e=S.eps[S.page]; const vs=vids(); if(!e||!vs.length) return;
+  const e=deckEps()[S.page]; const vs=vids(); if(!e||!vs.length) return;
   const t=ev.target.value/1000*(e.dur||0);
   vs.forEach(v=>v.currentTime=t);
 });
 
 function renderStrip(){
-  const s=$('strip'); s.innerHTML='<span class="lbl">EPISODES</span>';
-  S.eps.forEach((e,i)=>{
+  const s=$('strip'); s.innerHTML=`<span class="lbl">EPISODES · ${S.taskSet||'全部'}</span>`;
+  deckEps().forEach((e,i)=>{
     const c=document.createElement('div');
     c.className='cell '+(e.status==='saved'?'saved':'trash')+(S.page===i?' cur':'');
     c.title=`${e.id} · ${e.task_slug} · ${(e.dur||0).toFixed(1)}s${e.status==='trash'?' · 回收站':''}`;
@@ -799,7 +1018,7 @@ $('trash-btn').onclick=()=>toggleTrash();
 
 async function toggleTrash(){
   if(onLive()) return;
-  const e=S.eps[S.page]; if(!e) return;
+  const e=deckEps()[S.page]; if(!e) return;
   try{
     await post(`/api/episodes/${e.id}/${e.status==='trash'?'restore':'trash'}`);
     toast(e.status==='trash'? e.id+' 已恢复' : e.id+' 已移入回收站','a');
@@ -831,9 +1050,9 @@ async function recToggle(){
     if(rec.state==='rec') await post('/api/rec/pause');
     else{
       const t=curTask(); if(!t) return toast('请先创建任务','r');
-      await post('/api/rec/start',{task_slug:t.slug});
+      await post('/api/rec/start',{task_slug:t.slug,task_set:t.set||null});
     }
-    S.status=await api('/api/status'); renderLiveCtrl();
+    S.status=await api('/api/status'); checkRecSound(); renderLiveCtrl();
   }catch(e){ toast(e.message,'r'); }
 }
 async function recSave(){
@@ -851,23 +1070,193 @@ $('recbtn').onclick=recToggle;
 $('savebtn').onclick=recSave;
 $('dropbtn').onclick=recDrop;
 
-/* ================= step4 导出 ================= */
-async function renderExport(){
+/* ================= step4 数据管理器 + 导出 ================= */
+/* 数据来自 S.eps(全量,含回收站);树 = 全部已保存 / 任务集合(tasks 文件) → 任务 → 批次 / 回收站;勾选存 S.expSel。
+   数据身份 = (task_set, task_slug),树内分组键为 "set::slug"(ekey),跨集合同 slug 互不合并 */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const ekey=e=>(e.task_set||'默认')+'::'+e.task_slug;
+const kslug=k=>k.split('::').slice(1).join('::');
+function mgrGroups(){
+  const byTask={}, trash=[];
+  for(const e of S.eps){
+    if(e.status==='trash'){ trash.push(e); continue; }
+    (byTask[ekey(e)]=byTask[ekey(e)]||[]).push(e);
+  }
+  return {byTask, trash};
+}
+/* 集合名 → 该集合任务 key(set::slug) 集。优先 tasks_by_set(不去重);旧后端降级用合并列表的 set 字段 */
+function mgrSetSlugs(){
+  const m={}, bySet=S.status?.tasks_by_set;
+  if(bySet){ for(const [name,ts] of Object.entries(bySet)) m[name]=new Set(ts.map(t=>name+'::'+t.slug)); }
+  else for(const t of (S.status?.tasks||[])){ (m[t.set]=m[t.set]||new Set()).add(tkey(t)); }
+  return m;
+}
+function mgrCoveredSlugs(){
+  const cov=new Set();
+  Object.values(mgrSetSlugs()).forEach(s=>s.forEach(x=>cov.add(x)));
+  return cov;
+}
+/* 节点标签:优先任务集合里的 prompt(按 set+slug 精确匹配),孤儿用任一 episode 的 task_prompt,再退化为 slug */
+function mgrTaskLabel(key,eps){
+  const slug=kslug(key), set=key.split('::')[0];
+  const t=(S.status?.tasks||[]).find(t=>t.slug===slug&&(t.set||'默认')===set);
+  if(t) return t.prompt;
+  const e=(eps||[]).find(x=>x.task_prompt);
+  return e?e.task_prompt:slug;
+}
+/* 任务在集合文件中的稳定顺序号(与采集台 #N 编号同源);找不到(孤儿)返回 null */
+function mgrTaskId(slug,setName){
+  const bySet=S.status?.tasks_by_set;
+  const list=(bySet&&setName&&bySet[setName])?bySet[setName]:(S.status?.tasks||[]);
+  const i=list.findIndex(t=>t.slug===slug);
+  return i>=0? i+1 : null;
+}
+function mgrNodeEps(){
+  const {byTask,trash}=mgrGroups(), n=S.mgrNode;
+  if(n.type==='trash') return trash;
+  if(n.type==='task') return byTask[n.key]||[];
+  if(n.type==='session') return (byTask[n.key]||[]).filter(e=>e.session===n.session);
+  if(n.type==='set'){ const keys=mgrSetSlugs()[n.set]; return S.eps.filter(e=>e.status==='saved'&&!!keys?.has(ekey(e))); }
+  if(n.type==='orphan'){ const cov=mgrCoveredSlugs(); return S.eps.filter(e=>e.status==='saved'&&!cov.has(ekey(e))); }
+  return S.eps.filter(e=>e.status==='saved');
+}
+function renderExport(){ renderMgrTree(); renderMgrEps(); }
+function renderMgrTree(){
+  const {byTask,trash}=mgrGroups();
+  const setSlugs=mgrSetSlugs();
+  const el=$('mgr-tree'); el.innerHTML='';
+  const nodeSel=n=>S.mgrNode.type===n.type&&S.mgrNode.key===n.key&&S.mgrNode.session===n.session&&S.mgrNode.set===n.set;
+  const mk=(node,label,cnt,cls='',caret='',prefix=null)=>{
+    const d=document.createElement('div');
+    d.className='tnode '+cls+(nodeSel(node)?' sel':'');
+    const tag=prefix!=null?`#${prefix} `:'';
+    d.innerHTML=`<span class="caret">${caret}</span><span class="lbl" title="${esc(tag+label)}">${prefix!=null?`<span class="tid">#${prefix}</span> `:''}${esc(label)}</span><span class="cnt">${cnt}</span>`;
+    d.onclick=()=>{ S.mgrNode=node; renderExport(); };
+    return d;
+  };
+  const toggleOpen=key=>{ S.mgrOpen.has(key)?S.mgrOpen.delete(key):S.mgrOpen.add(key); renderMgrTree(); };
+  const caretBtn=(d,key)=>{ d.querySelector('.caret').onclick=ev=>{ ev.stopPropagation(); toggleOpen(key); }; };
+  /* 任务节点(可展开批次),供集合/未归属节点内复用;label 带文件顺序号 #N 便于定位 */
+  const appendTask=(key,cls,setName)=>{
+    const eps=byTask[key];
+    const id=mgrTaskId(kslug(key),setName);
+    const open=S.mgrOpen.has('task:'+key);
+    const d=mk({type:'task',key,set:setName},mgrTaskLabel(key,eps),eps.length,cls,open?'▾':'▸',id);
+    caretBtn(d,'task:'+key);
+    el.appendChild(d);
+    if(open){
+      for(const s of [...new Set(eps.map(e=>e.session))].sort()){
+        el.appendChild(mk({type:'session',key,session:s,set:setName},s,eps.filter(e=>e.session===s).length,'l3'));
+      }
+    }
+  };
+  el.appendChild(mk({type:'all'},'全部已保存',S.eps.filter(e=>e.status==='saved').length));
+  /* 一级父目录 = 任务集合(tasks.json/.jsonl 文件);同一 slug 在不同集合是不同任务,各自独立显示 */
+  const covered=new Set();
+  for(const [setName,keys] of Object.entries(setSlugs)){
+    const dataKeys=Object.keys(byTask).filter(k=>keys.has(k));
+    // 按集合内文件顺序排(与 #N 编号一致),找不到的排最后
+    dataKeys.sort((a,b)=>(mgrTaskId(kslug(a),setName)??9e9)-(mgrTaskId(kslug(b),setName)??9e9)||a.localeCompare(b));
+    if(!dataKeys.length) continue;  // 无数据的集合不显示
+    dataKeys.forEach(k=>covered.add(k));
+    const open=S.mgrOpen.has('set:'+setName);
+    const d=mk({type:'set',set:setName},setName,dataKeys.reduce((a,k)=>a+byTask[k].length,0),'',open?'▾':'▸');
+    caretBtn(d,'set:'+setName);
+    el.appendChild(d);
+    if(open) for(const key of dataKeys) appendTask(key,'l2',setName);
+  }
+  /* 孤儿 key(有数据但不在任何任务集合)归入「未归属」 */
+  const orphans=Object.keys(byTask).filter(k=>!covered.has(k)).sort();
+  if(orphans.length){
+    const open=S.mgrOpen.has('set:未归属');
+    const d=mk({type:'orphan'},'未归属',orphans.reduce((a,k)=>a+byTask[k].length,0),'',open?'▾':'▸');
+    caretBtn(d,'set:未归属');
+    el.appendChild(d);
+    if(open) for(const key of orphans) appendTask(key,'l2',null);
+  }
+  el.appendChild(mk({type:'trash'},'回收站',trash.length));
+}
+function renderMgrEps(){
+  const eps=mgrNodeEps(), n=S.mgrNode;
+  const pathId=n.set!=null?`#${mgrTaskId(kslug(n.key||''),n.set)??'-'} `:'';
+  $('mgr-path').textContent= n.type==='trash'?'回收站'
+    : n.type==='set'?n.set
+    : n.type==='orphan'?'未归属'
+    : n.type==='task'?pathId+mgrTaskLabel(n.key,eps)
+    : n.type==='session'?`${pathId}${mgrTaskLabel(n.key,eps)} · ${n.session}`:'全部已保存';
+  const el=$('mgr-eps'); el.innerHTML='';
+  if(!eps.length){ el.innerHTML='<span style="color:var(--dim);font-size:13px">此节点暂无 episode</span>'; }
+  for(const e of eps){
+    const row=document.createElement('div');
+    row.className='mrow'+(e.status==='trash'?' trashed':'');
+    const ck=e.status==='saved'?`<input type="checkbox" data-id="${e.id}" ${S.expSel.has(e.id)?'checked':''}>`:'';
+    row.innerHTML=`${ck}<span class="mid">${e.id}</span><span class="mmeta">${e.session} · ${(e.dur||0).toFixed(1)}s · ${e.frames}帧</span><span class="mtxt" title="${esc(e.task_prompt||'')}">${e.task_prompt||e.task_slug}</span><span class="mact"></span>`;
+    const act=row.querySelector('.mact');
+    const mkBtn=(txt,title,fn,danger)=>{ const b=document.createElement('button'); b.textContent=txt; b.title=title; if(danger)b.className='danger'; b.onclick=fn; act.appendChild(b); };
+    mkBtn('▶','预览三路视频',()=>openMpv(e));
+    mkBtn('✎','修改提示词 / 归入任务',()=>openMed(e));
+    mkBtn(e.status==='trash'?'♻':'🗑',e.status==='trash'?'恢复':'标废',()=>mgrTrash(e));
+    if(e.status==='trash') mkBtn('✕','彻底删除(不可恢复)',()=>mgrDelete(e),true);
+    el.appendChild(row);
+  }
+  el.querySelectorAll('input[type=checkbox]').forEach(c=>c.onchange=()=>{ c.checked?S.expSel.add(c.dataset.id):S.expSel.delete(c.dataset.id); updateExpTotal(); });
+  updateExpTotal();
+}
+function updateExpTotal(){
+  const savedN=S.eps.filter(e=>e.status==='saved').length;
+  $('exp-total').textContent=S.expSel.size?`已选 ${S.expSel.size} 集`:`未勾选 = 导出全部 ${savedN} 集`;
+}
+$('mgr-all').onclick=()=>{ mgrNodeEps().filter(e=>e.status==='saved').forEach(e=>S.expSel.add(e.id)); renderMgrEps(); };
+$('mgr-none').onclick=()=>{ mgrNodeEps().forEach(e=>S.expSel.delete(e.id)); renderMgrEps(); };
+async function mgrTrash(e){
   try{
-    const ss=await api('/api/export/sessions');
-    const el=$('exp-picks');
-    if(!ss.length){ el.innerHTML='<span style="color:var(--dim);font-size:13px">暂无已保存 episode</span>'; return; }
-    el.innerHTML=ss.map((s,i)=>
-      `<label class="pick"><input type="checkbox" checked data-i="${i}">${s.task_slug} / ${s.session}<span class="cnt">${s.count} 集 · ${s.minutes} 分</span></label>`).join('');
-    el.dataset.sessions=JSON.stringify(ss);
-  }catch(e){ toast(e.message,'r'); }
+    await post(`/api/episodes/${e.id}/${e.status==='trash'?'restore':'trash'}`);
+    toast(e.status==='trash'? e.id+' 已恢复':e.id+' 已移入回收站','a');
+    S.expSel.delete(e.id);
+    await refreshEpisodes();
+  }catch(err){ toast(err.message,'r'); }
+}
+async function mgrDelete(e){
+  if(!confirm(`确认彻底删除 ${e.id}?此操作不可恢复`)) return;
+  try{
+    await post(`/api/episodes/${e.id}/delete`);
+    toast(e.id+' 已彻底删除','r');
+    await refreshEpisodes();
+  }catch(err){ toast(err.message,'r'); }
+}
+/* 预览弹窗:并排三路 mp4;关闭时停播并卸 src,释放连接与带宽 */
+function stopMpv(){ $('mpv-vids').querySelectorAll('video').forEach(v=>{ v.pause(); v.removeAttribute('src'); v.load(); }); }
+function closeMpv(){ stopMpv(); $('mpv-bg').classList.remove('open'); }
+function openMpv(e){
+  $('mpv-title').textContent=`${e.id} · ${e.task_prompt||e.task_slug}`;
+  $('mpv-vids').innerHTML=['wrist','left_rear','right_rear'].map(r=>
+    `<div class="cellv"><video src="/api/episodes/${e.id}/video/${r}" controls autoplay muted></video><span class="tag">${r.toUpperCase()}</span></div>`).join('');
+  $('mpv-bg').classList.add('open');
+}
+/* 编辑提示词弹窗:可只改文本,也可同时归入已有任务(后端会改 set/slug 并移动目录) */
+function openMed(e){
+  $('med-id').textContent=e.id;
+  $('med-prompt').value=e.task_prompt||'';
+  const cur=(e.task_set||'默认')+'::'+e.task_slug;
+  const opts=[`<option value="">(仅改文本,不归入 · 当前 ${e.task_set||'默认'}/${e.task_slug})</option>`]
+    .concat((S.status?.tasks||[]).filter(t=>tkey(t)!==cur).map(t=>`<option value="${tkey(t)}">${esc(t.prompt)} (${t.set||'默认'}/${t.slug})</option>`));
+  $('med-task').innerHTML=opts.join('');
+  $('med-save').onclick=async()=>{
+    const prompt=$('med-prompt').value.trim();
+    if(!prompt) return toast('提示词不能为空','r');
+    const v=$('med-task').value;
+    const body={task_prompt:prompt,task_slug:v?kslug(v):null,task_set:v?v.split('::')[0]:null};
+    try{
+      await post(`/api/episodes/${e.id}/meta`,body);
+      toast(e.id+' 已更新','g');
+      closeModals();
+      await refreshEpisodes();
+    }catch(err){ toast(err.message,'r'); }
+  };
+  $('med-bg').classList.add('open');
 }
 $('export-btn').onclick=async()=>{
-  const ss=JSON.parse($('exp-picks').dataset.sessions||'[]');
-  const sel=[...document.querySelectorAll('#exp-picks input:checked')].map(c=>{
-    const s=ss[+c.dataset.i]; return {task_slug:s.task_slug, session:s.session};
-  });
-  if(!sel.length) return toast('请至少勾选一个批次','r');
+  const sel=[...S.expSel].map(id=>({episode:id}));  // 空 = 全部已保存(后端语义)
   try{
     await post('/api/export',{name:$('exp-name').value.trim()||'so101_dataset_v21', selection:sel});
     pollExport();
@@ -884,7 +1273,7 @@ async function pollExport(){
 
 /* ================= 键盘 ================= */
 document.addEventListener('keydown',e=>{
-  if(e.target instanceof Element && e.target.matches('input,textarea')){ if(e.key==='Escape') e.target.blur(); return; }
+  if(e.target instanceof Element && e.target.matches('input,textarea,select')){ if(e.key==='Escape') e.target.blur(); return; }
   if(e.key==='Escape'){ closeModals(); return; }
   if(e.key==='?'){ $('help-bg').classList.toggle('open'); return; }
   if(e.key==='e'||e.key==='E'){ estop(); return; }
@@ -901,9 +1290,8 @@ document.addEventListener('keydown',e=>{
     case 'g': case 'G': $('jump-bg').classList.add('open'); $('jump-input').value=''; setTimeout(()=>$('jump-input').focus(),50); break;
     case 't': case 'T': {
       const ts=taskList(); if(!ts.length) break;
-      const cur=curTask(); const i=(ts.findIndex(x=>x.slug===cur.slug)+1)%ts.length;
-      S.curTask=ts[i].slug; localStorage.setItem('curTask',S.curTask);
-      renderTasks(); if(onLive()) renderDeck();
+      const cur=curTask(); const i=(ts.findIndex(x=>tkey(x)===tkey(cur))+1)%ts.length;
+      setCurTask(ts[i]);
       toast('当前任务 → '+ts[i].prompt); break; }
   }
 });

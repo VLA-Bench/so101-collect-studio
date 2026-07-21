@@ -42,11 +42,11 @@ uv run python -m unittest discover -s tests -v   # 运行测试(标准库 unitte
 | `cams.py` | `CamManager`：AVFoundation 枚举（按 deviceType 区分内置/外置，不用名称猜）、角色绑定（wrist / left_rear / right_rear）持久化为 uniqueID、流生命周期管理、绑定健康检查 |
 | `avf_capture.py` | `AVFCamStream`：用 `AVCaptureSession + deviceWithUniqueID:` 按 uniqueID 直采，绕开 OpenCV index（实测 index 与 uniqueID 会错位）；640×480，3 秒无帧看门狗标记异常。**必须**显式 `setActiveFormat_` + 用 `AVFrameRateRange` 自带 CMTime 钳帧率（否则 session 按最高 60fps 协商、单路 USB 带宽翻倍，三路同开时第三路收不到帧）；启动经模块级锁串行 + 3s 等首帧 + 整路重试 3 次 |
 | `recorder.py` | `RecordService`：30Hz 遥操作控制环（读 leader → 写 follower → 取相机最新帧）与录制状态机（idle/rec/paused）解耦；JPEG 异步落盘；保存后后台 ffmpeg 编码 MP4 + 写 parquet，staging 晋升 library |
-| `library.py` | 任务 / 批次(session, `YYYY-MM-DD_HHMM`)/ episode 管理；episode 编号全局自增 `episode_%06d`；回收站移动/清空；staging 残留清点 |
+| `library.py` | 任务 / 批次(session, `YYYY-MM-DD_HHMM`)/ episode 管理；episode 编号全局自增 `episode_%06d`；回收站移动/清空、单集彻底删除（仅回收站）；episode meta 编辑（改 prompt / 归入已有任务并移目录）；staging 残留清点 |
 | `exporter.py` | v2.1 数据集导出（模块级单例任务 `JOB`，同时只允许一个导出）：拼接 parquet、注入 EEF、拷贝 MP4 不重编码、写 `meta/{info,modality,episodes,tasks,episodes_stats,validation_report}.json*` |
 | `fk.py` | SO101 正运动学：自解析 `assets/so101_new_calib.urdf`（base → gripper_frame_link），归一化关节值经校准 JSON 反算 ticks → 弧度 → FK，纯 numpy 无 placo |
 
-前端 `static/index.html`（约 900 行 vanilla JS）：四个页面步骤（①设备与校准 ②相机绑定 ③采集台 ④导出），键盘优先快捷键（Space/Enter/Backspace/E 等，见 README）。
+前端 `static/index.html`（约 1200 行 vanilla JS）：四个页面步骤（①设备与校准 ②相机绑定 ③采集台 ④数据管理与导出），键盘优先快捷键（Space/Enter/Backspace/E 等，见 README）。采集台右侧预览区只翻当前任务集合的 episode（`deckEps()` 按集合 slug 过滤，「全部」不过滤）；④是按「任务集合 → 任务 → 批次 → episode」浏览全部数据的管理器（预览 / 改提示词 / 标废恢复 / 彻底删除 + episode 级勾选导出）。
 
 ## 数据流与目录约定
 
@@ -61,6 +61,7 @@ uv run python -m unittest discover -s tests -v   # 运行测试(标准库 unitte
 - 先暂存后入库：「保存」才把 staging 晋升 library，「舍弃」= 删目录。
 - 设备身份一律按序列号持久化：机械臂 = USB serial number，相机 = AVFoundation uniqueID；不依赖会漂移的 index/端口。
 - 校准文件：`configs/calibration_backup/{robots/so_follower,teleoperators/so_leader}/*.json` 是用户自备的备份，"导入校准"仅复制到 LeRobot 缓存目录，文件名取 `devices.yaml` 里的 `id`。
+- 任务集合：`~/so101_data/tasks.json` 为「默认」集合，`tasks_<名称>.json` 为额外集合；每个文件**双格式兼容**——JSON 数组（`[{"prompt": ...}]`，可带 `slug`）或 LeRobot `tasks.jsonl`（每行 `{"task_index","task"}`），也直接识别同名 `.jsonl` 文件（`tasks.jsonl` / `tasks_<名称>.jsonl`，同名冲突时 `.json` 优先，新写默认 `.json`）。**slug 不必手写**：缺省由 `_slugify(prompt)` 派生，文件里显式写的 slug 原样保留（避免与已有 library 目录脱钩）；写回按原文件格式（`.jsonl` 写 LeRobot 行，`.json` 写带 slug 的数组）。`library.load_tasks()` 合并全部（按 slug 去重，先出现优先）并带 `set` 来源字段，`load_tasks_grouped()` 提供不去重的按集合分组视图（`/api/status` 的 `tasks_by_set`，前端切具体集合时按它过滤——合并去重会把重复任务标成先出现的集合，导致该集合过滤后为空）；采集台可切换集合或「全部」；网页端添加/导入写入当前集合文件，跨集合按 slug 查重。
 
 ## 硬性边界与安全约定（改代码必须遵守）
 
@@ -80,7 +81,12 @@ uv run python -m unittest discover -s tests -v   # 运行测试(标准库 unitte
 
 ## 测试
 
-- 唯一测试文件：`tests/test_camera_and_teleop.py`，用 `unittest` + mock 覆盖：相机枚举缓存与断流重建、遥操作启动时序（控制环就绪才算 on）、相机失败时报错需含角色与原因、前端不含 MJPEG 长连接。
+- 测试文件在 `tests/` 下，用 `unittest` + mock，全部不触碰真实硬件：
+  - `test_camera_and_teleop.py`：相机枚举缓存与断流重建、遥操作启动时序（控制环就绪才算 on）、相机失败时报错需含角色与原因、前端不含 MJPEG 长连接。
+  - `test_task_sets.py`：任务集合枚举（含 `.jsonl`）、json/jsonl 双格式解析、slug 派生与显式保留、跨集合查重。
+  - `test_tasks_import.py`：导入的格式识别、重复跳过、坏行不落盘。
+  - `test_export_selection.py`：导出选择（任务 / 批次 / episode id / 空 = 全部已保存）与按任务汇总。
+  - `test_episode_manage.py`：`update_episode`（改 prompt / 归入任务移目录 / 校验）与 `delete_episode`（仅回收站）。
 - 运行：`uv run python -m unittest discover -s tests -v`。测试不触碰真实硬件（全部 Fake）。
 - 没有 CI 配置；改动后请本地跑通测试，涉及硬件路径的改动需要真机冒烟（连接 → 遥操作 → 录制 → 导出）。
 
