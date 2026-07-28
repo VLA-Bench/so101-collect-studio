@@ -1,0 +1,78 @@
+{
+  "scenes": [
+    {
+      "id": "A",
+      "boxes": [
+        "large_red",
+        "small_blue"
+      ],
+      "blocks": [
+        "cube_red",
+        "cube_blue",
+        "cuboid_red"
+      ],
+      "tasks": [
+        {
+          "targets": {
+            "cube_red": "large_red",
+            "cube_blue": "small_blue",
+            "cuboid_red": "large_red"
+          }
+        },
+        {
+          "targets": {
+            "cube_red": "small_blue",
+            "cube_blue": "large_red",
+            "cuboid_red": "small_blue"
+          }
+        },
+        {
+          "targets": {
+            "cube_red": "large_red",
+            "cube_blue": "small_blue",
+            "cuboid_red": "small_blue"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "boxes": [
+        "large_red",
+        "small_yellow"
+      ],
+      "blocks": [
+        "cube_red",
+        "cube_blue",
+        "l_block_yellow"
+      ],
+      "tasks": [
+        {
+          "targets": {
+            "cube_red": "large_red",
+            "cube_blue": "large_red",
+            "l_block_yellow": "small_yellow"
+          }
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "boxes": [
+        "large_blue"
+      ],
+      "blocks": [
+        "cube_yellow",
+        "l_block_blue"
+      ],
+      "tasks": [
+        {
+          "targets": {
+            "cube_yellow": "large_blue",
+            "l_block_blue": null
+          }
+        }
+      ]
+    }
+  ]
+}

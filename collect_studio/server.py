@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import config_store, exporter, library
+from . import config_store, exporter, library, scene_view, scenes
 from .arms import ArmManager
 from .cams import CamManager
 from .paths import ASSETS, STATIC
@@ -44,6 +44,7 @@ def status():
         "tasks": library.load_tasks(),
         "tasks_by_set": library.load_tasks_grouped(),  # 不去重的分组视图,供前端按集合过滤
         "task_sets": library.list_task_sets(),
+        "scene_sets": scenes.scene_ids(),  # 场景派生集合(只读,前端禁用添加/导入)
         "stats": library.stats(),
         "staging_leftovers": library.recover_staging(),
         "ts": time.time(),
@@ -224,6 +225,8 @@ class TaskReq(BaseModel):
 
 @app.post("/api/tasks")
 def add_task(req: TaskReq):
+    if scenes.is_scene_set(req.set or library.DEFAULT_SET):
+        raise HTTPException(400, f"集合 {req.set or library.DEFAULT_SET} 由场景生成,请在 /scene 制定模式中编辑")
     try:
         return library.add_task(req.prompt, req.slug, req.set)
     except ValueError as e:
@@ -237,6 +240,8 @@ class TaskImportReq(BaseModel):
 
 @app.post("/api/tasks/import")
 def import_tasks(req: TaskImportReq):
+    if scenes.is_scene_set(req.set or library.DEFAULT_SET):
+        raise HTTPException(400, f"集合 {req.set or library.DEFAULT_SET} 由场景生成,请在 /scene 制定模式中编辑")
     try:
         return library.import_tasks(req.content, req.set)
     except ValueError as e:
@@ -327,10 +332,97 @@ def export_status():
     return exporter.JOB
 
 
+# ============ 场景制定(scenes.json 权威) ============
+@app.get("/api/scenes")
+def scenes_get():
+    """展开场景(含派生 subtasks/instruction) + 全局统计 + 元数据(供制定模式编辑器)。"""
+    payload = scenes.scenes_payload()
+    payload["meta"] = {**scene_view.META, **payload["meta"]}  # 展示常量 + 资产目录/布局
+    return payload
+
+
+class ScenesSaveReq(BaseModel):
+    scenes: list[dict]
+    force: bool = False
+
+
+@app.post("/api/scenes")
+def scenes_save(req: ScenesSaveReq):
+    """校验并写回 scenes.json;校验错误 400,重复资产 409(force 放行),成功同步派生 tasks 文件。"""
+    try:
+        scenes.save_scenes(req.model_dump(), force=req.force)
+    except scenes.SceneValidationError as e:
+        raise HTTPException(400, detail={"errors": e.errors}) from e
+    except scenes.SceneConflictError as e:
+        raise HTTPException(409, detail={"conflicts": e.conflicts}) from e
+    return scenes_get()
+
+
+class ClassifyReq(BaseModel):
+    boxes: list[str]
+    blocks: list[str]
+    targets: dict
+
+
+@app.post("/api/scenes/classify")
+def scenes_classify(req: ClassifyReq):
+    """对一组资产 + targets 现算子任务与指令(编辑器实时预览)。"""
+    try:
+        return scenes.classify(req.boxes, req.blocks, req.targets)
+    except (KeyError, ValueError, TypeError) as e:
+        raise HTTPException(400, f"资产非法: {e}") from e
+
+
+# ============ 场景展示页(只读) ============
+class DisplayCurrentReq(BaseModel):
+    task_set: str | None = None
+    task_slug: str | None = None
+    prompt: str
+
+
+@app.post("/api/display/current")
+def display_current(req: DisplayCurrentReq):
+    """采集台前端上报当前选中任务,落盘 current_display.json(重启保留)。"""
+    return scene_view.write_current(req.task_set, req.task_slug, req.prompt)
+
+
+@app.get("/api/display/scene")
+def display_scene():
+    """展示页轮询:当前任务 + 资产配置。优先按 instruction 精确匹配 scenes.json
+    (返回完整场景,含未被点名的干扰空盒与 subtasks);未命中回退提示词文本解析。"""
+    current = scene_view.read_current()
+    if not current:
+        return {"current": None, "scene": None, "instruction": None, "meta": scene_view.META}
+    prompt = current["prompt"]
+    hit = scenes.instruction_index().get(prompt)
+    if hit:
+        sc, task = hit["scene"], hit["task"]
+        scene = {
+            "scene_id": hit["scene_id"],
+            "subtasks": task["subtasks"],
+            "boxes": sc["boxes"],
+            "blocks": [dict(b, target=task["targets"].get(b["id"])) for b in sc["blocks"]],
+            "targets": task["targets"],
+        }
+        return {"current": current, "scene": scene, "instruction": prompt, "meta": scene_view.META}
+    scene_payload = scene_view.payload(prompt)
+    return {
+        "current": current,
+        "scene": scene_payload.get("scene"),
+        "instruction": prompt,
+        "meta": scene_view.META,
+    }
+
+
 # ============ 前端 ============
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/scene")
+def scene_page():
+    return FileResponse(STATIC / "scene.html")
 
 
 @app.get("/assets/{name}")

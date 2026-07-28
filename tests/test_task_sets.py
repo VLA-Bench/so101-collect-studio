@@ -115,5 +115,34 @@ class TaskSetsTest(unittest.TestCase):
                          [(0, "Pick the cube"), (1, "Place it")])
 
 
+class SceneSetGuardTest(unittest.TestCase):
+    """场景派生集合只读:POST /api/tasks(/import) 命中场景 id 时被拒 400(mock scenes 判定)。"""
+
+    @classmethod
+    def setUpClass(cls):
+        from collect_studio import server
+
+        cls.server = server
+
+    def setUp(self):
+        mock.patch("collect_studio.scenes.is_scene_set", lambda name: name == "A").start()
+        self.addCleanup(mock.patch.stopall)
+
+    def test_add_task_to_scene_set_rejected(self):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as cm:
+            self.server.add_task(self.server.TaskReq(prompt="x", set="A"))
+        self.assertEqual(cm.exception.status_code, 400)
+        self.assertIn("制定模式", cm.exception.detail)
+
+    def test_import_to_scene_set_rejected(self):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as cm:
+            self.server.import_tasks(self.server.TaskImportReq(content='{"task_index":0,"task":"x"}', set="A"))
+        self.assertEqual(cm.exception.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

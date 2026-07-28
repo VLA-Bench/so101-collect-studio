@@ -324,7 +324,7 @@
         <div style="font-size:11px;color:var(--dim);margin-top:6px">开启瞬间从动臂会跟随主动臂当前位姿,请先把主动臂摆到接近从动臂的姿态。</div>
       </section>
       <section>
-        <h3>任务(<kbd>T</kbd> 轮换)</h3>
+        <h3>任务(<kbd>T</kbd> 轮换)<a href="/scene" target="_blank" style="float:right;font-size:11px;font-weight:400">场景展示页 ⧉</a></h3>
         <select id="taskset-sel" style="margin-bottom:6px"></select>
         <div id="tasklist"></div>
         <div class="addtask">
@@ -627,6 +627,11 @@ function renderStatus(){
   if(w.state==='running') $('wiggle-msg').textContent=w.msg||'请晃动主动臂…';
   else if(w.state==='done'){ $('wiggle-msg').innerHTML='<span style="color:var(--green)">✓ '+w.msg+'</span>'; }
   else if(w.state==='error'){ $('wiggle-msg').innerHTML='<span style="color:var(--red)">'+w.msg+'</span>'; }
+  // 连接结果提示与真实状态对齐:两臂都连上才显示「已连接」,断开即清除(连接中除外)
+  if(!S.connecting){
+    const bothConn=['leader','follower'].every(r=>arms.connected[r]);
+    $('connect-msg').innerHTML=bothConn?'<span style="color:var(--green)">✓ 已连接(从动臂力矩已释放)</span>':'';
+  }
   // cams badge
   const cams=st.cams, nExt=(cams.devices||[]).filter(d=>!d.builtin).length;
   const bound=Object.values(cams.binding||{}).filter(Boolean).length;
@@ -688,9 +693,10 @@ async function runHealth(){
 }
 $('wiggle-btn').onclick=()=>post('/api/arms/wiggle').catch(e=>toast(e.message,'r'));
 $('connect-btn').onclick=async()=>{
-  $('connect-msg').textContent='连接中…';
-  try{ await post('/api/arms/connect'); $('connect-msg').innerHTML='<span style="color:var(--green)">✓ 已连接(从动臂力矩已释放)</span>'; toast('两臂已连接','g'); }
+  S.connecting=true; $('connect-msg').textContent='连接中…';
+  try{ await post('/api/arms/connect'); toast('两臂已连接','g'); }
   catch(e){ $('connect-msg').textContent=''; toast('连接失败:'+e.message,'r'); }
+  finally{ S.connecting=false; renderStatus(); }
 };
 $('disconnect-btn').onclick=()=>post('/api/arms/disconnect').then(()=>toast('已断开')).catch(e=>toast(e.message,'r'));
 $('estop').onclick=()=>estop();
@@ -801,11 +807,17 @@ function deckEps(){
   const keys=new Set(ts.map(tkey));
   return S.eps.filter(e=>keys.has((e.task_set||'默认')+'::'+e.task_slug));
 }
+/* 场景展示页:上报当前选中任务(fire-and-forget,失败静默,后端落盘为准) */
+function reportDisplay(){
+  const t=curTask(); if(!t) return;
+  post('/api/display/current',{task_set:t.set||'默认',task_slug:t.slug,prompt:t.prompt}).catch(()=>{});
+}
 /* 统一的任务切换入口:切任务后 deck 回 LIVE,避免页码跨任务错位 */
 function setCurTask(t){
   S.curTask=tkey(t); localStorage.setItem('curTask',S.curTask);
   S.page='live';
   renderTasks(); if(S.step===3) renderDeck();
+  reportDisplay();
 }
 /* 任务排序:已采集(>0 集)在前,未采集在后,组内保持文件原顺序;
    编号 #id = 任务在文件中的顺序号(i+1),固定唯一,不随采集进度重排 */
@@ -819,6 +831,14 @@ function sortedTasks(){
 const TASK_FOLD_N=2;  /* 每组折叠时只显示前 2 个(正序/倒序均按显示顺序取前 2) */
 function renderTasks(){
   const el=$('tasklist'); if(!el) return;
+  // 场景派生集合只读:禁用添加/导入(由 /scene 制定模式编辑,服务端同样拒绝)
+  const sceneSet=(S.status?.scene_sets||[]).includes(S.taskSet);
+  const sceneHint='该集合由场景生成,请在场景展示页的制定模式编辑';
+  for(const id of ['addtask-btn','importtask-btn','newtask']){
+    const b=$(id); if(!b) continue;
+    b.disabled=sceneSet; b.title=sceneSet?sceneHint:'';
+  }
+  $('newtask').placeholder=sceneSet?sceneHint:'新任务提示词…';
   const cur=curTask();
   const ts=sortedTasks();
   // 切成「已采集/未采集」两组(组顺序固定:已采集在前)
@@ -883,7 +903,7 @@ function renderTasks(){
     }
   }
 }
-$('taskset-sel').onchange=e=>{ S.taskSet=e.target.value; localStorage.setItem('taskSet',S.taskSet); S.page='live'; renderTasks(); if(S.step===3) renderDeck(); };
+$('taskset-sel').onchange=e=>{ S.taskSet=e.target.value; localStorage.setItem('taskSet',S.taskSet); S.page='live'; renderTasks(); if(S.step===3) renderDeck(); reportDisplay(); };
 $('addtask-btn').onclick=async()=>{
   const v=$('newtask').value.trim(); if(!v) return;
   try{ const t=await post('/api/tasks',{prompt:v,set:S.taskSet==='全部'?null:S.taskSet});
@@ -914,10 +934,13 @@ function renderDeck(){
     S.page='live';
     $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
     $('pagemeta').textContent='task: '+(curTask()? tkey(curTask()).replace('::','/') :'—');
+    // 提示词前加与左侧任务列表一致的文件顺序号,方便定位
+    const ct=curTask();
+    const cid=ct?(sortedTasks().find(x=>tkey(x.t)===tkey(ct))||{}).id:null;
     feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
       `<div class="feed ${cls}"><img data-preview-url="/frame/role/${r}.jpg" alt="${r} 实时画面"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
       +`<div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>`
-      +`<div class="prompt-ov">“${curTask()?.prompt||''}”</div>`;
+      +`<div class="prompt-ov">${cid?'#'+cid+' ':''}“${ct?.prompt||''}”</div>`;
     $('scrub-row').style.display='none'; $('live-ctrl').style.display='flex';
     $('trash-btn').style.display='none'; $('golive-btn').style.display='none';
     startPreviews(feeds);
