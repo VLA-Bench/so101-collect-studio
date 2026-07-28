@@ -265,6 +265,7 @@ class RecordService:
             "id": self.ep_id,
             "session": self.session,
             "task_slug": self.cur_task["slug"],
+            "task_set": self.cur_task.get("set", "默认"),
             "task_prompt": self.cur_task["prompt"],
             "fps": rec["fps"],
             "width": rec["width"],
@@ -316,7 +317,7 @@ class RecordService:
                         raise RuntimeError(f"ffmpeg 编码失败:{r.stderr[-300:]}")
             self._write_parquet(ep_dir, meta)
             shutil.rmtree(ep_dir / "frames")
-            dst = LIBRARY / meta["task_slug"] / meta["session"] / meta["id"]
+            dst = LIBRARY / meta.get("task_set", "默认") / meta["task_slug"] / meta["session"] / meta["id"]
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(ep_dir), str(dst))
             job["state"] = "done"

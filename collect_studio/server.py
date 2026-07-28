@@ -7,13 +7,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import config_store, exporter, library
+from . import config_store, exporter, library, scene_view, scenes
 from .arms import ArmManager
 from .cams import CamManager
 from .paths import ASSETS, STATIC
 from .recorder import RecordService
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("server")
 
 app = FastAPI(title="SO101 Collect Studio")
@@ -24,6 +24,10 @@ rec = RecordService(arms, cams)
 
 @app.on_event("startup")
 def _startup():
+    try:
+        library.migrate_library_layout()  # 旧 <slug>/ 三层目录迁入 <set>/<slug>/ 四层结构
+    except Exception:  # noqa: BLE001
+        log.exception("library layout migration failed")
     try:
         cams.ensure_default_binding()
     except Exception:  # noqa: BLE001
@@ -38,6 +42,9 @@ def status():
         "cams": cams.status(),
         "rec": rec.status(),
         "tasks": library.load_tasks(),
+        "tasks_by_set": library.load_tasks_grouped(),  # 不去重的分组视图,供前端按集合过滤
+        "task_sets": library.list_task_sets(),
+        "scene_sets": scenes.scene_ids(),  # 场景派生集合(只读,前端禁用添加/导入)
         "stats": library.stats(),
         "staging_leftovers": library.recover_staging(),
         "ts": time.time(),
@@ -165,11 +172,18 @@ def teleop_stop():
 
 class RecStartReq(BaseModel):
     task_slug: str
+    task_set: str | None = None  # 任务所属集合;空 = 合并列表里第一个匹配 slug 的任务
 
 
 @app.post("/api/rec/start")
 def rec_start(req: RecStartReq):
-    task = next((t for t in library.load_tasks() if t["slug"] == req.task_slug), None)
+    if req.task_set:
+        try:
+            task = next((t for t in library.load_tasks(req.task_set) if t["slug"] == req.task_slug), None)
+        except FileNotFoundError:  # 集合文件不存在
+            task = None
+    else:
+        task = next((t for t in library.load_tasks() if t["slug"] == req.task_slug), None)
     if not task:
         raise HTTPException(404, f"任务 {req.task_slug} 不存在")
     try:
@@ -206,12 +220,30 @@ def rec_discard():
 class TaskReq(BaseModel):
     prompt: str
     slug: str | None = None
+    set: str | None = None  # 目标任务集合;空 = 「默认」集合(tasks.json)
 
 
 @app.post("/api/tasks")
 def add_task(req: TaskReq):
+    if scenes.is_scene_set(req.set or library.DEFAULT_SET):
+        raise HTTPException(400, f"集合 {req.set or library.DEFAULT_SET} 由场景生成,请在 /scene 制定模式中编辑")
     try:
-        return library.add_task(req.prompt, req.slug)
+        return library.add_task(req.prompt, req.slug, req.set)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+class TaskImportReq(BaseModel):
+    content: str  # tasks.jsonl 文件全文
+    set: str | None = None  # 目标任务集合
+
+
+@app.post("/api/tasks/import")
+def import_tasks(req: TaskImportReq):
+    if scenes.is_scene_set(req.set or library.DEFAULT_SET):
+        raise HTTPException(400, f"集合 {req.set or library.DEFAULT_SET} 由场景生成,请在 /scene 制定模式中编辑")
+    try:
+        return library.import_tasks(req.content, req.set)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -243,15 +275,42 @@ def episode_restore(ep_id: str):
     return library.move_episode(ep_id, to_trash=False)
 
 
+class EpisodeMetaReq(BaseModel):
+    task_prompt: str | None = None  # 新提示词文本
+    task_slug: str | None = None    # 同时归入已有任务(改 slug 并移动目录)
+    task_set: str | None = None     # 目标任务所属集合(与 task_slug 一起定位;空 = 首个匹配 slug 的集合)
+
+
+@app.post("/api/episodes/{ep_id}/meta")
+def episode_meta(ep_id: str, req: EpisodeMetaReq):
+    try:
+        return library.update_episode(ep_id, req.task_prompt, req.task_slug, req.task_set)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/api/episodes/{ep_id}/delete")
+def episode_delete(ep_id: str):
+    """彻底删除(仅回收站)。"""
+    try:
+        return library.delete_episode(ep_id)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.post("/api/trash/empty")
 def trash_empty():
     return {"removed": library.empty_trash()}
 
 
 # ============ 导出 ============
-@app.get("/api/export/sessions")
-def export_sessions():
-    return exporter.sessions_summary()
+@app.get("/api/export/tasks")
+def export_tasks():
+    return exporter.tasks_summary()
 
 
 class ExportReq(BaseModel):
@@ -273,10 +332,97 @@ def export_status():
     return exporter.JOB
 
 
+# ============ 场景制定(scenes.json 权威) ============
+@app.get("/api/scenes")
+def scenes_get():
+    """展开场景(含派生 subtasks/instruction) + 全局统计 + 元数据(供制定模式编辑器)。"""
+    payload = scenes.scenes_payload()
+    payload["meta"] = {**scene_view.META, **payload["meta"]}  # 展示常量 + 资产目录/布局
+    return payload
+
+
+class ScenesSaveReq(BaseModel):
+    scenes: list[dict]
+    force: bool = False
+
+
+@app.post("/api/scenes")
+def scenes_save(req: ScenesSaveReq):
+    """校验并写回 scenes.json;校验错误 400,重复资产 409(force 放行),成功同步派生 tasks 文件。"""
+    try:
+        scenes.save_scenes(req.model_dump(), force=req.force)
+    except scenes.SceneValidationError as e:
+        raise HTTPException(400, detail={"errors": e.errors}) from e
+    except scenes.SceneConflictError as e:
+        raise HTTPException(409, detail={"conflicts": e.conflicts}) from e
+    return scenes_get()
+
+
+class ClassifyReq(BaseModel):
+    boxes: list[str]
+    blocks: list[str]
+    targets: dict
+
+
+@app.post("/api/scenes/classify")
+def scenes_classify(req: ClassifyReq):
+    """对一组资产 + targets 现算子任务与指令(编辑器实时预览)。"""
+    try:
+        return scenes.classify(req.boxes, req.blocks, req.targets)
+    except (KeyError, ValueError, TypeError) as e:
+        raise HTTPException(400, f"资产非法: {e}") from e
+
+
+# ============ 场景展示页(只读) ============
+class DisplayCurrentReq(BaseModel):
+    task_set: str | None = None
+    task_slug: str | None = None
+    prompt: str
+
+
+@app.post("/api/display/current")
+def display_current(req: DisplayCurrentReq):
+    """采集台前端上报当前选中任务,落盘 current_display.json(重启保留)。"""
+    return scene_view.write_current(req.task_set, req.task_slug, req.prompt)
+
+
+@app.get("/api/display/scene")
+def display_scene():
+    """展示页轮询:当前任务 + 资产配置。优先按 instruction 精确匹配 scenes.json
+    (返回完整场景,含未被点名的干扰空盒与 subtasks);未命中回退提示词文本解析。"""
+    current = scene_view.read_current()
+    if not current:
+        return {"current": None, "scene": None, "instruction": None, "meta": scene_view.META}
+    prompt = current["prompt"]
+    hit = scenes.instruction_index().get(prompt)
+    if hit:
+        sc, task = hit["scene"], hit["task"]
+        scene = {
+            "scene_id": hit["scene_id"],
+            "subtasks": task["subtasks"],
+            "boxes": sc["boxes"],
+            "blocks": [dict(b, target=task["targets"].get(b["id"])) for b in sc["blocks"]],
+            "targets": task["targets"],
+        }
+        return {"current": current, "scene": scene, "instruction": prompt, "meta": scene_view.META}
+    scene_payload = scene_view.payload(prompt)
+    return {
+        "current": current,
+        "scene": scene_payload.get("scene"),
+        "instruction": prompt,
+        "meta": scene_view.META,
+    }
+
+
 # ============ 前端 ============
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/scene")
+def scene_page():
+    return FileResponse(STATIC / "scene.html")
 
 
 @app.get("/assets/{name}")

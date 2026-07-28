@@ -63,7 +63,7 @@ def build_modality_json() -> dict:
 
 
 def start_export(name: str, selection: list[dict], delta_frame: str = "base"):
-    """selection: [{task_slug, session}];空列表 = 全部已保存 episode。"""
+    """selection: [{task_slug, session?}] 或 [{episode: ep_id}];空列表 = 全部已保存 episode。"""
     if JOB.get("state") == "running":
         raise RuntimeError("已有导出任务在运行")
     JOB.clear()
@@ -74,8 +74,18 @@ def start_export(name: str, selection: list[dict], delta_frame: str = "base"):
 def _selected_episodes(selection):
     eps = [e for e in library.list_episodes() if e["status"] == "saved"]
     if selection:
-        keys = {(s["task_slug"], s["session"]) for s in selection}
-        eps = [e for e in eps if (e["task_slug"], e["session"]) in keys]
+        # {"episode": id} 按 id 精确选;{task_slug, task_set?, session} 按 (任务,批次);
+        # {task_slug, task_set?} 按任务全部批次。task_set 未给时匹配任意集合中的该 slug。
+        def hit(e, s):
+            return e["task_slug"] == s["task_slug"] and (
+                not s.get("task_set") or e.get("task_set") == s["task_set"])
+        ids = {s["episode"] for s in selection if s.get("episode")}
+        task_only = [s for s in selection if s.get("task_slug") and not s.get("session")]
+        pairs = [s for s in selection if s.get("task_slug") and s.get("session")]
+        eps = [e for e in eps
+               if e["id"] in ids
+               or any(hit(e, s) for s in task_only)
+               or any(hit(e, s) and e["session"] == s["session"] for s in pairs)]
     eps.sort(key=lambda e: e["id"])
     return eps
 
@@ -281,17 +291,20 @@ def _run(name: str, selection, delta_frame: str):
         JOB.update({"state": "error", "msg": str(e)})
 
 
-def sessions_summary() -> list[dict]:
-    """按 task+session 汇总,供导出页勾选。"""
-    agg: dict[tuple, dict] = {}
+def tasks_summary() -> list[dict]:
+    """按 (task_set, task_slug) 汇总(合并该任务所有批次),供导出页勾选。"""
+    agg: dict[tuple[str, str], dict] = {}
     for e in library.list_episodes():
         if e["status"] != "saved":
             continue
-        k = (e["task_slug"], e["session"])
-        a = agg.setdefault(k, {"task_slug": k[0], "session": k[1], "count": 0, "minutes": 0.0})
+        key = (e.get("task_set", "默认"), e["task_slug"])
+        a = agg.setdefault(key, {"task_set": key[0], "task_slug": key[1],
+                                 "count": 0, "minutes": 0.0, "sessions": set()})
         a["count"] += 1
         a["minutes"] += e.get("dur", 0) / 60
-    out = sorted(agg.values(), key=lambda x: (x["session"], x["task_slug"]), reverse=True)
+        a["sessions"].add(e["session"])
+    out = sorted(agg.values(), key=lambda x: (x["task_set"], x["task_slug"]))
     for a in out:
         a["minutes"] = round(a["minutes"], 1)
+        a["sessions"] = len(a["sessions"])
     return out

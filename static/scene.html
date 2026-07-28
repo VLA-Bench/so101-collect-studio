@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>场景 · SO101 Collect Studio</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --border: #d9dce1; --text: #23272e;
+    --accent: #2f6fdd; --warn: #b26a00; --danger: #c0392b; --ok: #1e8449;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+           background: var(--panel); border-bottom: 1px solid var(--border); }
+  header b { font-size: 14px; }
+  #status { margin-left: auto; font-size: 12px; color: #888; }
+  button { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px;
+           background: #fff; cursor: pointer; font-size: 13px; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:disabled { background: #a9c3ef; border-color: #a9c3ef; cursor: default; }
+  .tab { padding: 4px 10px; border-radius: 6px; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  main { flex: 1; display: grid; min-height: 0; }
+  body.mode-collect main { grid-template-columns: 1fr 380px; }
+  body.mode-edit main { grid-template-columns: 250px 1fr 380px; }
+  body.mode-collect #editAssets, body.mode-collect #editTasks, body.mode-collect #editFooter { display: none; }
+  body.mode-edit #collectPanel { display: none; }
+
+  #viewport { position: relative; min-width: 0; }
+  #threeMount { position: absolute; inset: 0; }
+  #threeFallback { position: absolute; inset: 0; display: none; align-items: center;
+                   justify-content: center; color: var(--warn); padding: 20px; text-align: center; }
+  aside { background: var(--panel); overflow-y: auto; padding: 12px 14px; }
+  #collectPanel, #editTasks { border-left: 1px solid var(--border); }
+  #editAssets { border-right: 1px solid var(--border); display: flex; flex-direction: column;
+                overflow: hidden; padding: 0; }
+  #assetList { flex: 1; overflow-y: auto; padding: 10px 10px 4px; }
+  #statsCard { border-top: 1px solid var(--border); background: #fafbfc; padding: 10px 12px; flex: none; }
+
+  /* 采集模式面板 */
+  #instruction { font-size: 18px; font-weight: 600; line-height: 1.4; margin: 4px 0 10px;
+                 word-break: break-all; }
+  #instruction.unmatched { color: var(--warn); font-weight: 500; }
+  h3 { margin: 14px 0 6px; font-size: 13px; color: #666; border-top: 1px dashed var(--border);
+       padding-top: 10px; }
+  #collectPanel h3:first-of-type, #assetList h3:first-child { border-top: none; padding-top: 0; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; font-size: 13px; }
+  .row .note { color: #999; font-size: 12px; }
+  .chip { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25);
+          display: inline-block; flex: none; }
+  .tag { font-size: 11px; background: #e3ecfb; color: var(--accent); border-radius: 4px;
+         padding: 0 5px; white-space: nowrap; margin-right: 4px; }
+  .tag.none { background: #f0e6d2; color: var(--warn); }
+  .hint { font-size: 12px; color: #999; }
+  #sceneId { font-size: 12px; color: #888; }
+
+  /* 制定模式:统计卡 */
+  .sc-title { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px;
+              display: flex; align-items: baseline; gap: 6px; }
+  .sc-title .sc-note { font-weight: 400; color: #aaa; font-size: 11px; }
+  .sc-row { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; font-size: 12px; }
+  .sc-row .name { color: #555; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc-row .num { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 18px; text-align: right; }
+  .sc-row.dim .num { color: #bbb; font-weight: 400; }
+  .sc-badge { font-size: 11px; background: #e3ecfb; color: var(--accent);
+              border-radius: 4px; padding: 0 5px; flex: none; }
+  .sc-badge.none { background: #f0e6d2; color: var(--warn); }
+  .sc-divider { border-top: 1px dashed var(--border); margin: 6px 0; }
+  .asset-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 13px; }
+
+  /* 制定模式:任务卡片 */
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 10px;
+          background: #fbfcfd; }
+  .card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .card-head .no { font-weight: 600; }
+  .card-head .ops { margin-left: auto; display: flex; gap: 4px; }
+  .card-head .ops button { padding: 1px 7px; font-size: 12px; }
+  .trow { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .trow select { flex: 1; min-width: 0; padding: 2px 4px; }
+  .instr { font-size: 12px; color: #555; font-style: italic; margin-top: 6px;
+           border-top: 1px dashed var(--border); padding-top: 5px; word-break: break-all; }
+
+  #editFooter { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+                background: var(--panel); border-top: 1px solid var(--border); }
+  #dirtyBadge { color: var(--warn); font-weight: 600; }
+  #message { font-size: 13px; }
+  #message.err { color: var(--danger); white-space: pre-line; }
+  #message.ok { color: var(--ok); }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body class="mode-collect">
+<header>
+  <b>场景</b>
+  <button id="modeCollect" class="tab active">采集模式</button>
+  <button id="modeEdit" class="tab">制定模式</button>
+  <span id="status">连接中…</span>
+</header>
+<main>
+  <aside id="editAssets">
+    <div id="assetList"></div>
+    <div id="statsCard"></div>
+  </aside>
+  <section id="viewport">
+    <div id="threeMount"></div>
+    <div id="threeFallback">3D 预览加载失败（Three.js CDN 不可达），仅显示文字清单。</div>
+  </section>
+  <aside id="collectPanel">
+    <div id="sceneId"></div>
+    <div id="instruction">等待采集台选择任务…</div>
+    <div id="subtaskTags" style="margin-bottom:6px"></div>
+    <div id="parseNote" class="hint" style="display:none;margin-bottom:8px">资产配置由提示词文本解析得到；未被点名的干扰空盒不在提示词中。</div>
+    <div id="panels"></div>
+  </aside>
+  <aside id="editTasks"></aside>
+</main>
+<div id="editFooter">
+  <span id="dirtyBadge"></span>
+  <button id="saveBtn" class="primary" disabled>保存</button>
+  <button id="revertBtn" disabled>恢复</button>
+  <span id="message"></span>
+  <span class="hint" style="margin-left:auto;">保存后同步生成 tasks_&lt;场景id&gt;.jsonl 任务集合；数据存于 ~/so101_data/scenes.json</span>
+</div>
+
+<script type="module">
+// 双模式场景页:
+// - 采集模式(只读):轮询 /api/display/scene(1s),显示采集台当前任务与资产配置
+//   (命中 scenes.json → 完整场景含干扰空盒;未命中 → 提示词文本解析降级);
+// - 制定模式:场景/任务编辑器(迁移自 desk01 web/index.html 三栏编辑器,2026-07 脱钩)。
+// 两种模式共用一套 3D 构建函数(boxCenters/toThree/makeBoxMesh/makeBlockMesh)。
+const SIZE_ZH = { large: '大', medium: '中', small: '小' };
+const COLOR_ZH = { red: '红', yellow: '黄', blue: '蓝' };
+const SHAPE_ZH = { cube: '立方', cuboid: '长方', l_block: 'L块' };
+
+const $ = (sel) => document.querySelector(sel);
+const deepcopy = (o) => JSON.parse(JSON.stringify(o));
+
+function colorHex(meta, color) {
+  const hex = (meta?.color_hex || {})[color] || '#999999';
+  return parseInt(hex.slice(1), 16);
+}
+function chipHtml(meta, color) {
+  return `<span class="chip" style="background:${(meta?.color_hex || {})[color] || '#999'}"></span>`;
+}
+
+// ----------------------------------------------------------------------------------
+// 模式切换
+// ----------------------------------------------------------------------------------
+let mode = 'collect';
+function setMode(m) {
+  mode = m;
+  document.body.className = 'mode-' + m;
+  $('#modeCollect').classList.toggle('active', m === 'collect');
+  $('#modeEdit').classList.toggle('active', m === 'edit');
+  $('#status').textContent = m === 'collect' ? '已连接' : '';
+  if (m === 'edit') bootEdit();
+}
+$('#modeCollect').onclick = () => setMode('collect');
+$('#modeEdit').onclick = () => setMode('edit');
+
+// ----------------------------------------------------------------------------------
+// 3D 视口(与 desk01 一致:坐标映射 MuJoCo(x,y,z) → Three(x, z, -(y-0.25)))
+// ----------------------------------------------------------------------------------
+let three = null;  // { renderer, scene, camera, controls, assetGroup, THREE }
+
+function boxCenters(sizes, L) {  // 与 scenes.py::box_centers 一致
+  const widths = sizes.map(s => L.BOX_OUTER_X_M[s]);
+  const gap = (2 * L.DESK_HALF_X_M - widths.reduce((a, b) => a + b, 0)) / (widths.length + 1);
+  const centers = [];
+  let cursor = -L.DESK_HALF_X_M + gap;
+  for (const w of widths) { centers.push(cursor + w / 2); cursor += w + gap; }
+  return centers;
+}
+
+async function initThree() {
+  try {
+    const THREE = await import('three');
+    const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+    const mount = $('#threeMount');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(devicePixelRatio);
+    mount.appendChild(renderer.domElement);
+    const scene3 = new THREE.Scene();
+    scene3.background = new THREE.Color(0xf5f6f8);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
+    camera.position.set(0, 0.45, 0.5);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0, 0);
+    scene3.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(0.5, 1, 0.3);
+    scene3.add(sun);
+    const desk = new THREE.Mesh(
+      new THREE.BoxGeometry(0.45, 0.01, 0.55),
+      new THREE.MeshLambertMaterial({ color: 0xd8cfc0 })
+    );
+    desk.position.y = -0.005;
+    scene3.add(desk);
+    const assetGroup = new THREE.Group();
+    scene3.add(assetGroup);
+    three = { renderer, scene: scene3, camera, controls, assetGroup, THREE };
+    const resize = () => {
+      const w = mount.clientWidth, h = mount.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    new ResizeObserver(resize).observe(mount);
+    resize();
+    (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene3, camera); })();
+    rebuildCurrent();
+  } catch (e) {
+    console.error('Three.js 加载失败', e);
+    $('#threeFallback').style.display = 'flex';
+  }
+}
+
+const toThree = (x, y, z) => [x, z, -(y - 0.25)];  // MuJoCo → Three 坐标
+
+function makeBoxMesh(sizeKey, hex, L) {
+  const { THREE } = three;
+  const w = L.BOX_OUTER_X_M[sizeKey], d = L.BOX_OUTER_Y_M[sizeKey], h = 0.05, t = 0.004;
+  const mat = new THREE.MeshLambertMaterial({ color: hex, transparent: true, opacity: 0.85 });
+  const g = new THREE.Group();
+  const bottom = new THREE.Mesh(new THREE.BoxGeometry(w, t, d), mat);
+  bottom.position.y = t / 2;
+  g.add(bottom);
+  const walls = [
+    [w, h, t, 0, h / 2, d / 2 - t / 2], [w, h, t, 0, h / 2, -d / 2 + t / 2],
+    [t, h, d, w / 2 - t / 2, h / 2, 0], [t, h, d, -w / 2 + t / 2, h / 2, 0],
+  ];
+  for (const [sx, sy, sz, px, py, pz] of walls) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+    m.position.set(px, py, pz);
+    g.add(m);
+  }
+  return g;
+}
+
+function makeBlockMesh(shape, hex, meta) {
+  const { THREE } = three;
+  const mat = new THREE.MeshLambertMaterial({ color: hex });
+  const h = meta.block_height[shape];
+  const g = new THREE.Group();
+  if (shape === 'l_block') {  // 用两个长方体拼出 L 俯视外形 (0.06 x 0.08)
+    const a = new THREE.Mesh(new THREE.BoxGeometry(0.06, h, 0.03), mat);
+    a.position.set(0, h / 2, -0.025);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, 0.08), mat);
+    b.position.set(-0.015, h / 2, 0);
+    g.add(a, b);
+  } else {
+    const [ex, ey] = meta.layout.BLOCK_EXTENT_XY_M[shape];
+    const m = new THREE.Mesh(new THREE.BoxGeometry(ex, h, ey), mat);
+    m.position.y = h / 2;
+    g.add(m);
+  }
+  return g;
+}
+
+/* 两模式共用的 3D 重建:boxes/blocks 为属性对象数组([{size,color}]/[{shape,color}]) */
+function rebuildAssets(boxes, blocks, meta) {
+  if (!three || !meta) return;
+  const { assetGroup } = three;
+  while (assetGroup.children.length) {
+    const c = assetGroup.children.pop();
+    c.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+  const L = meta.layout;
+  const centers = boxCenters(boxes.map(b => b.size), L);
+  boxes.forEach((b, i) => {
+    const mesh = makeBoxMesh(b.size, colorHex(meta, b.color), L);
+    mesh.position.set(...toThree(centers[i], L.BOX_Y_M, 0));
+    assetGroup.add(mesh);
+  });
+  blocks.forEach((b, i) => {
+    if (i >= L.BLOCK_SLOTS_M.length) return;
+    const mesh = makeBlockMesh(b.shape, colorHex(meta, b.color), meta);
+    mesh.position.set(...toThree(L.BLOCK_SLOTS_M[i][0], L.BLOCK_SLOTS_M[i][1], 0));
+    assetGroup.add(mesh);
+  });
+}
+
+function rebuildCurrent() {
+  if (mode === 'edit') rebuildEditor3D();
+  else rebuildCollect3D();
+}
+
+// ----------------------------------------------------------------------------------
+// 采集模式:轮询 + 清单面板
+// ----------------------------------------------------------------------------------
+let lastKey = null;   // 上次渲染内容指纹
+let lastData = null;  // 最近一次 payload
+
+function rebuildCollect3D() {
+  const sc = lastData?.scene, meta = lastData?.meta;
+  rebuildAssets(sc ? sc.boxes : [], sc ? sc.blocks : [], meta);
+}
+
+function renderPanels(data) {
+  const instrEl = $('#instruction');
+  const noteEl = $('#parseNote');
+  const tagsEl = $('#subtaskTags');
+  const panelsEl = $('#panels');
+  const cur = data.current;
+  if (!cur) {
+    instrEl.textContent = '等待采集台选择任务…';
+    instrEl.className = '';
+    noteEl.style.display = 'none'; tagsEl.innerHTML = ''; panelsEl.innerHTML = '';
+    $('#sceneId').textContent = '';
+    return;
+  }
+  instrEl.textContent = cur.prompt;
+  const sc = data.scene, meta = data.meta;
+  if (!sc) {
+    instrEl.className = 'unmatched';
+    noteEl.style.display = 'none';
+    tagsEl.innerHTML = '';
+    panelsEl.innerHTML = '<p class="hint">无法从提示词文本解析出资产配置（非场景指令格式）。</p>';
+    $('#sceneId').textContent = '';
+    return;
+  }
+  instrEl.className = '';
+  if (sc.scene_id) {  // 命中 scenes.json:完整场景(含空盒与派生子任务)
+    noteEl.style.display = 'none';
+    $('#sceneId').textContent = `场景 ${sc.scene_id}`;
+    const names = meta?.subtasks || {};
+    tagsEl.innerHTML = sc.subtasks.length
+      ? sc.subtasks.map(s => `<span class="tag">${s} ${names[s] || ''}</span>`).join('')
+      : '<span class="tag none">未归类/基础放置</span>';
+  } else {  // 提示词文本解析降级:空盒不在提示词中
+    noteEl.style.display = '';
+    tagsEl.innerHTML = '';
+    $('#sceneId').textContent = '';
+  }
+
+  // 盒子清单:尺寸+颜色,内装哪些块(targets 指向它的块);空盒也列出
+  let html = '<h3>盒子</h3>';
+  for (const b of sc.boxes) {
+    const members = sc.blocks.filter(k => sc.targets[k.id] === b.id);
+    const memText = members.length
+      ? members.map(k => `${COLOR_ZH[k.color]}·${SHAPE_ZH[k.shape]}`).join('、')
+      : '（空）';
+    html += `<div class="row">${chipHtml(meta, b.color)}<span>${SIZE_ZH[b.size]}·${COLOR_ZH[b.color]}盒</span>`
+          + `<span class="note">${b.id} ← ${memText}</span></div>`;
+  }
+  html += '<h3>物块</h3>';
+  for (const k of sc.blocks) {
+    const tid = sc.targets[k.id];
+    const dest = tid ? `→ ${tid}` : '留桌';
+    html += `<div class="row">${chipHtml(meta, k.color)}<span>${COLOR_ZH[k.color]}·${SHAPE_ZH[k.shape]}</span>`
+          + `<span class="note">${k.id} ${dest}</span></div>`;
+  }
+  const left = sc.blocks.filter(k => sc.targets[k.id] == null);
+  if (left.length) {
+    html += `<h3>留桌</h3><div class="row"><span class="note">`
+          + left.map(k => `${COLOR_ZH[k.color]}·${SHAPE_ZH[k.shape]}（${k.id}）`).join('、')
+          + `</span></div>`;
+  }
+  panelsEl.innerHTML = html;
+}
+
+async function poll() {
+  if (mode !== 'collect') return;  // 制定模式编辑期间不刷新,避免顶掉 3D
+  try {
+    const data = await (await fetch('/api/display/scene')).json();
+    const key = JSON.stringify([data.current, data.scene]);
+    $('#status').textContent = '已连接';
+    if (key !== lastKey) {
+      lastKey = key;
+      lastData = data;
+      renderPanels(data);
+      rebuildCollect3D();
+    }
+  } catch (e) {
+    $('#status').textContent = '无法连接服务器';
+  }
+}
+
+// ----------------------------------------------------------------------------------
+// 制定模式:场景/任务编辑器(迁移自 desk01 web/index.html,已脱钩)
+// 状态:saved = 上次保存的快照(collapse 形式),draft = 内存草稿。一切编辑只动 draft。
+// ----------------------------------------------------------------------------------
+const E = {
+  loaded: false,
+  meta: null,          // 目录、布局常量、子任务名(来自 /api/scenes 的 meta)
+  stats: null,         // 全局统计
+  saved: [],           // [{id, boxes:[id], blocks:[id], tasks:[{targets}]}]
+  draft: [],
+  cur: 0,
+  dirty: false,
+  classifyToken: 0,    // 防止 classify 异步响应乱序
+};
+
+function collapseScene(sc) {
+  return {
+    id: sc.scene_id,
+    boxes: sc.boxes.map(b => b.id),
+    blocks: sc.blocks.map(b => b.id),
+    tasks: sc.tasks.map(t => ({ targets: { ...t.targets } })),
+  };
+}
+
+function boxLabel(bid) { const a = E.meta.box_attrs[bid]; return `${SIZE_ZH[a.size]}·${COLOR_ZH[a.color]}盒`; }
+function blockLabel(bid) { const a = E.meta.block_attrs[bid]; return `${COLOR_ZH[a.color]}·${SHAPE_ZH[a.shape]}`; }
+
+function markDirty() { E.dirty = true; updateEditFooter(); }
+
+function updateEditFooter(msg, cls) {
+  $('#dirtyBadge').textContent = E.dirty ? '● 未保存' : '';
+  $('#saveBtn').disabled = !E.dirty;
+  $('#revertBtn').disabled = !E.dirty;
+  const m = $('#message');
+  m.textContent = msg || '';
+  m.className = cls || '';
+}
+
+function renderEditTabs() {
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px';
+  E.draft.forEach((sc, i) => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (i === E.cur ? ' active' : '');
+    b.textContent = sc.id;
+    b.onclick = () => { E.cur = i; renderEditAll(); };
+    head.appendChild(b);
+  });
+  const add = document.createElement('button');
+  add.textContent = '+ 新建场景';
+  add.onclick = addScene;
+  const del = document.createElement('button');
+  del.textContent = '删除场景';
+  del.onclick = delScene;
+  head.append(add, del);
+  return head;
+}
+
+function renderEditStats() {
+  const el = $('#statsCard');
+  if (!E.stats || !E.meta) { el.innerHTML = ''; return; }
+  const sc = E.draft[E.cur];
+  const draftCount = sc ? sc.tasks.length : 0;
+  const savedCount = sc ? (E.stats.per_scene_tasks[sc.id] ?? 0) : 0;
+  const countText = E.dirty ? `${draftCount}（已存 ${savedCount}）` : `${savedCount}`;
+  let html = `<div class="sc-title">本场景任务 <span class="num">${countText}</span>`
+           + `<span class="sc-note" style="margin-left:auto;">统计</span></div>`
+           + `<div class="sc-divider"></div>`
+           + `<div class="sc-title">全局子任务覆盖 <span class="sc-note" style="margin-left:auto;">基于已保存数据</span></div>`;
+  for (const [sid, name] of Object.entries(E.meta.subtasks)) {
+    const n = E.stats.per_subtask[sid] ?? 0;
+    html += `<div class="sc-row${n ? '' : ' dim'}"><span class="sc-badge">${sid}</span>`
+          + `<span class="name">${name}</span><span class="num">${n}</span></div>`;
+  }
+  html += `<div class="sc-row${E.stats.unclassified ? '' : ' dim'}"><span class="sc-badge none">—</span>`
+        + `<span class="name">未归类/基础放置</span><span class="num">${E.stats.unclassified}</span></div>`;
+  el.innerHTML = html;
+}
+
+function renderEditAssets() {
+  const panel = $('#assetList');
+  panel.innerHTML = '';
+  if (!E.draft.length) { panel.innerHTML = '<p class="hint">没有场景，请在右侧新建。</p>'; return; }
+  const sc = E.draft[E.cur];
+  const mkGroup = (title, ids, kind, labelFn, colorOf) => {
+    const h = document.createElement('h3'); h.textContent = title; panel.appendChild(h);
+    for (const id of ids) {
+      const row = document.createElement('label');
+      row.className = 'asset-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = sc[kind].includes(id);
+      cb.onchange = () => toggleAsset(kind, id, cb.checked);
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.style.background = (E.meta.color_hex || {})[colorOf(id)] || '#999';
+      row.append(cb, chip, document.createTextNode(`${labelFn(id)} ${id}`));
+      panel.appendChild(row);
+    }
+  };
+  mkGroup('盒子（尺寸·颜色）', E.meta.box_ids, 'boxes', boxLabel, id => E.meta.box_attrs[id].color);
+  mkGroup('物块（颜色·形状）', E.meta.block_ids, 'blocks', blockLabel, id => E.meta.block_attrs[id].color);
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = '勾选只改草稿，点底部「保存」才写入 scenes.json 并同步任务集合。';
+  panel.appendChild(hint);
+}
+
+function toggleAsset(kind, id, checked) {
+  const sc = E.draft[E.cur];
+  if (kind === 'boxes') {
+    if (checked) sc.boxes.push(id);
+    else {
+      sc.boxes = sc.boxes.filter(b => b !== id);
+      sc.tasks.forEach(t => { for (const k in t.targets) if (t.targets[k] === id) t.targets[k] = null; });
+    }
+  } else {
+    if (checked) { sc.blocks.push(id); sc.tasks.forEach(t => { t.targets[id] = null; }); }
+    else {
+      sc.blocks = sc.blocks.filter(b => b !== id);
+      sc.tasks.forEach(t => { delete t.targets[id]; });
+    }
+  }
+  markDirty();
+  renderEditAll();
+}
+
+function renderEditTasks() {
+  const panel = $('#editTasks');
+  panel.innerHTML = '';
+  panel.appendChild(renderEditTabs());
+  if (!E.draft.length) return;
+  const sc = E.draft[E.cur];
+  const head = document.createElement('h3');
+  head.textContent = `任务卡片（${sc.tasks.length}）`;
+  head.style.borderTop = 'none';
+  panel.appendChild(head);
+
+  sc.tasks.forEach((task, ti) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.index = ti;
+
+    const ch = document.createElement('div');
+    ch.className = 'card-head';
+    ch.innerHTML = `<span class="no">#${ti + 1}</span><span class="tags"></span>`;
+    const ops = document.createElement('span');
+    ops.className = 'ops';
+    const dup = document.createElement('button');
+    dup.textContent = '复制';
+    dup.onclick = () => { sc.tasks.splice(ti + 1, 0, deepcopy(task)); markDirty(); renderEditAll(); };
+    const del = document.createElement('button');
+    del.textContent = '删除';
+    del.onclick = () => { if (confirm(`删除场景 ${sc.id} 的任务 #${ti + 1}？`)) { sc.tasks.splice(ti, 1); markDirty(); renderEditAll(); } };
+    ops.append(dup, del);
+    ch.appendChild(ops);
+    card.appendChild(ch);
+
+    if (!sc.blocks.length) {
+      const p = document.createElement('div');
+      p.className = 'hint';
+      p.textContent = '当前场景没有物块，请先在左栏勾选。';
+      card.appendChild(p);
+    }
+    for (const bid of sc.blocks) {
+      const row = document.createElement('div');
+      row.className = 'trow';
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.style.background = (E.meta.color_hex || {})[E.meta.block_attrs[bid].color] || '#999';
+      const lab = document.createElement('span');
+      lab.textContent = blockLabel(bid);
+      const sel = document.createElement('select');
+      const optDesk = document.createElement('option');
+      optDesk.value = '';
+      optDesk.textContent = '留桌';
+      sel.appendChild(optDesk);
+      for (const boxId of sc.boxes) {
+        const o = document.createElement('option');
+        o.value = boxId;
+        o.textContent = boxLabel(boxId);
+        sel.appendChild(o);
+      }
+      sel.value = task.targets[bid] ?? '';
+      sel.onchange = () => { task.targets[bid] = sel.value || null; markDirty(); onTargetsChanged(); };
+      row.append(chip, lab, sel);
+      card.appendChild(row);
+    }
+    const instr = document.createElement('div');
+    instr.className = 'instr';
+    card.appendChild(instr);
+    panel.appendChild(card);
+  });
+
+  const add = document.createElement('button');
+  add.textContent = '+ 添加任务';
+  add.disabled = !sc.blocks.length;
+  add.onclick = () => {
+    const targets = {};
+    sc.blocks.forEach(b => { targets[b] = null; });
+    sc.tasks.push({ targets });
+    markDirty();
+    renderEditAll();
+  };
+  panel.append(add);
+}
+
+// targets 变化后:轻量刷新子任务标签与派生指令(不重渲染卡片,避免打断下拉操作)
+function onTargetsChanged() {
+  refreshClassify();
+  rebuildEditor3D();
+  updateEditFooter();
+}
+
+// 调 server 现算每个任务的子任务与指令(判别逻辑唯一来源在 Python)
+async function refreshClassify() {
+  if (!E.draft.length) return;
+  const sc = E.draft[E.cur];
+  const token = ++E.classifyToken;
+  const results = await Promise.all(sc.tasks.map(t =>
+    fetch('/api/scenes/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boxes: sc.boxes, blocks: sc.blocks, targets: t.targets }),
+    }).then(r => r.json()).catch(() => null)
+  ));
+  if (token !== E.classifyToken) return;  // 期间又改了,丢弃过期结果
+  document.querySelectorAll('#editTasks .card').forEach(card => {
+    const r = results[Number(card.dataset.index)];
+    if (!r) return;
+    const tags = card.querySelector('.tags');
+    tags.innerHTML = '';
+    if (r.subtasks && r.subtasks.length) {
+      for (const sid of r.subtasks) {
+        const s = document.createElement('span');
+        s.className = 'tag';
+        s.textContent = `${sid} ${E.meta.subtasks[sid]}`;
+        tags.appendChild(s);
+      }
+    } else {
+      const s = document.createElement('span');
+      s.className = 'tag none';
+      s.textContent = '未归类/基础放置';
+      tags.appendChild(s);
+    }
+    card.querySelector('.instr').textContent = r.instruction || '（空任务）';
+  });
+}
+
+function rebuildEditor3D() {
+  if (!E.meta || !E.draft.length) { rebuildAssets([], [], E.meta); return; }
+  const sc = E.draft[E.cur];
+  rebuildAssets(
+    sc.boxes.map(id => E.meta.box_attrs[id]),
+    sc.blocks.map(id => E.meta.block_attrs[id]),
+    E.meta,
+  );
+}
+
+// ----------------------------------------------------------------------------------
+// 制定模式:保存 / 恢复 / 场景增删
+// ----------------------------------------------------------------------------------
+async function saveScenes(force = false) {
+  updateEditFooter('保存中…');
+  let res, payload;
+  try {
+    res = await fetch('/api/scenes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenes: E.draft, force }),
+    });
+    payload = await res.json();
+  } catch (e) {
+    updateEditFooter('保存失败：无法连接服务器', 'err');
+    return;
+  }
+  if (res.status === 200) {
+    E.saved = payload.scenes.map(collapseScene);
+    E.draft = deepcopy(E.saved);
+    E.stats = payload.stats;
+    E.dirty = false;
+    if (E.cur >= E.draft.length) E.cur = Math.max(0, E.draft.length - 1);
+    renderEditAll();
+    updateEditFooter('已保存到 scenes.json，任务集合已同步', 'ok');
+  } else if (res.status === 409) {
+    const conflicts = payload.detail?.conflicts || payload.conflicts || [];
+    const desc = conflicts.map(c => `场景 ${c.id} 与场景 ${c.matches}`).join('、');
+    if (confirm(`${desc} 的资产完全相同。\n仍要保存吗？`)) saveScenes(true);
+    else updateEditFooter('已取消保存', 'err');
+  } else {
+    const errors = payload.detail?.errors || payload.errors || [payload.detail || '未知错误'];
+    updateEditFooter('校验失败，未写盘：\n' + errors.join('\n'), 'err');
+  }
+}
+
+function revertEdit() {
+  if (!confirm('放弃所有未保存的修改，恢复到上次保存的状态？')) return;
+  E.draft = deepcopy(E.saved);
+  if (E.cur >= E.draft.length) E.cur = Math.max(0, E.draft.length - 1);
+  E.dirty = false;
+  renderEditAll();
+  updateEditFooter('已恢复', 'ok');
+}
+
+function addScene() {
+  const used = new Set(E.draft.map(s => s.id));
+  let suggestion = '';
+  for (let i = 0; i < 26; i++) {
+    const c = String.fromCharCode(65 + i);
+    if (!used.has(c)) { suggestion = c; break; }
+  }
+  const id = prompt('新场景 id（唯一，会成为任务集合名 tasks_<id>.jsonl）：', suggestion);
+  if (!id) return;
+  if (used.has(id)) { alert(`场景 id ${id} 已存在`); return; }
+  E.draft.push({ id, boxes: [], blocks: [], tasks: [] });
+  E.cur = E.draft.length - 1;
+  markDirty();
+  renderEditAll();
+}
+
+function delScene() {
+  if (!E.draft.length) return;
+  const sc = E.draft[E.cur];
+  if (!confirm(`删除场景 ${sc.id}（含 ${sc.tasks.length} 个任务）？保存后生效。\n注意：旧的任务集合文件 tasks_${sc.id}.jsonl 不会被删除（保护已录数据关联），如不需要请手动清理。`)) return;
+  E.draft.splice(E.cur, 1);
+  E.cur = Math.max(0, E.cur - 1);
+  markDirty();
+  renderEditAll();
+}
+
+function renderEditAll() {
+  renderEditStats();
+  renderEditAssets();
+  renderEditTasks();
+  rebuildEditor3D();
+  refreshClassify();
+  updateEditFooter();
+}
+
+async function bootEdit() {
+  if (E.loaded) { renderEditAll(); return; }
+  let payload;
+  try {
+    payload = await (await fetch('/api/scenes')).json();
+  } catch (e) {
+    updateEditFooter('无法加载 /api/scenes', 'err');
+    return;
+  }
+  E.meta = payload.meta;
+  E.stats = payload.stats;
+  E.saved = payload.scenes.map(collapseScene);
+  E.draft = deepcopy(E.saved);
+  E.loaded = true;
+  renderEditAll();
+  $('#saveBtn').onclick = () => saveScenes(false);
+  $('#revertBtn').onclick = revertEdit;
+}
+
+// ----------------------------------------------------------------------------------
+// 启动
+// ----------------------------------------------------------------------------------
+initThree();  // 异步,失败有 fallback 提示
+const params = new URLSearchParams(location.search);
+if (params.get('mode') === 'edit') setMode('edit');
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

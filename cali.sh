@@ -1,0 +1,2 @@
+lerobot-calibrate --robot.type=so101_follower   --robot.port=/dev/tty.usbmodem5B415327841   --robot.id=my_awesome_follower_arm
+lerobot-calibrate   --teleop.type=so101_leader   --teleop.port=/dev/tty.usbmodem5B415328621  --teleop.id=my_awesome_leader_arm
