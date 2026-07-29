@@ -3,6 +3,7 @@ import threading
 
 import yaml
 
+from .gripper_protection import DEFAULT_GRIPPER_PROTECTION
 from .paths import DEVICES_YAML
 
 _LOCK = threading.Lock()
@@ -16,6 +17,7 @@ DEFAULTS = {
     # role -> AVFoundation uniqueID;首次启动时按枚举顺序自动填 0/1/2
     "cameras": {"wrist": None, "left_rear": None, "right_rear": None},
     "record": {"fps": 30, "width": 640, "height": 480},
+    "gripper_protection": dict(DEFAULT_GRIPPER_PROTECTION),
 }
 
 

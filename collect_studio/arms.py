@@ -16,6 +16,7 @@ from lerobot.motors import Motor, MotorNormMode
 from lerobot.motors.feetech import FeetechMotorsBus
 from lerobot.robots.so_follower.config_so_follower import SOFollowerRobotConfig
 from lerobot.robots.so_follower.so_follower import SOFollower
+from lerobot.robots.utils import ensure_safe_goal_position
 from lerobot.teleoperators.so_leader.config_so_leader import SOLeaderTeleopConfig
 from lerobot.teleoperators.so_leader.so_leader import SOLeader
 
@@ -26,6 +27,8 @@ log = logging.getLogger("arms")
 
 ARM_VID = 6790  # 0x1A86 QinHeng (两臂控制板同款)
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+CURRENT_MA_PER_COUNT = 6.5
+BUS_NUM_RETRY = 3  # 首次通信失败后最多额外重试 3 次
 
 
 def _bare_bus(port: str) -> FeetechMotorsBus:
@@ -292,11 +295,167 @@ class ArmManager:
             self.follower.bus.enable_torque()
             self.torque_on = True
 
+    @staticmethod
+    def _bus_call_with_retry(operation: str, call, diagnose=None):
+        for retry in range(BUS_NUM_RETRY + 1):
+            try:
+                result = call()
+                if retry:
+                    log.info(
+                        "%s在第 %d/%d 次重试后恢复",
+                        operation,
+                        retry,
+                        BUS_NUM_RETRY,
+                    )
+                return result
+            except Exception as e:  # noqa: BLE001
+                if diagnose is not None:
+                    try:
+                        diagnose(retry + 1)
+                    except Exception:  # noqa: BLE001
+                        log.exception("%s第 %d 次尝试的舵机响应诊断失败", operation, retry + 1)
+                if retry == BUS_NUM_RETRY:
+                    log.error("%s失败，已用尽 %d 次重试: %s", operation, BUS_NUM_RETRY, e)
+                    raise
+                log.warning(
+                    "%s失败，开始第 %d/%d 次重试: %s",
+                    operation,
+                    retry + 1,
+                    BUS_NUM_RETRY,
+                    e,
+                )
+
+    @staticmethod
+    def _log_sync_read_diagnostic(operation: str, attempt: int, bus) -> None:
+        """读取组读失败后 SDK 留下的缓冲区，不额外访问舵机总线。"""
+        reader = getattr(bus, "sync_reader", None)
+        motors = getattr(bus, "motors", None)
+        data = getattr(reader, "data_dict", None)
+        if reader is None or not isinstance(motors, dict) or not isinstance(data, dict):
+            log.warning("%s第 %d 次尝试无法获取逐舵机响应详情", operation, attempt)
+            return
+
+        names_by_id = {motor.id: name for name, motor in motors.items()}
+        requested = list(data)
+        responded = []
+        missing = []
+        for motor_id in requested:
+            name = names_by_id.get(motor_id, "未知关节")
+            label = f"{name}(id={motor_id})"
+            if reader.isAvailable(
+                motor_id,
+                reader.start_address,
+                reader.data_length,
+            ):
+                responded.append(label)
+            else:
+                missing.append(label)
+
+        if not missing:
+            log.warning(
+                "%s第 %d 次尝试失败，但 SDK 缓冲区显示全部舵机均有响应",
+                operation,
+                attempt,
+            )
+            return
+
+        log.warning(
+            "%s第 %d 次尝试响应详情:已响应=%s;首个未响应=%s;其后未检查=%s",
+            operation,
+            attempt,
+            responded or ["无"],
+            missing[0],
+            missing[1:] or ["无"],
+        )
+
+    def read_leader_action(self) -> dict[str, float]:
+        with self.lock:
+            if not self.leader:
+                raise RuntimeError("主动臂未连接")
+            position = self._bus_call_with_retry(
+                "主动臂位置读取",
+                lambda: self.leader.bus.sync_read("Present_Position"),
+                lambda attempt: self._log_sync_read_diagnostic(
+                    "主动臂位置读取",
+                    attempt,
+                    self.leader.bus,
+                ),
+            )
+            return {f"{name}.pos": value for name, value in position.items()}
+
+    def read_follower_position(self) -> dict[str, float]:
+        with self.lock:
+            if not self.follower:
+                raise RuntimeError("从动臂未连接")
+            return self._bus_call_with_retry(
+                "从动臂位置读取",
+                lambda: self.follower.bus.sync_read("Present_Position"),
+                lambda attempt: self._log_sync_read_diagnostic(
+                    "从动臂位置读取",
+                    attempt,
+                    self.follower.bus,
+                ),
+            )
+
+    def send_action(self, action: dict[str, float]) -> dict[str, float]:
+        with self.lock:
+            if not self.follower:
+                raise RuntimeError("从动臂未连接")
+            goal = {
+                key.removesuffix(".pos"): value
+                for key, value in action.items()
+                if key.endswith(".pos")
+            }
+            max_relative_target = self.follower.config.max_relative_target
+            if max_relative_target is not None:
+                current = self._bus_call_with_retry(
+                    "从动臂限幅位置读取",
+                    lambda: self.follower.bus.sync_read("Present_Position"),
+                    lambda attempt: self._log_sync_read_diagnostic(
+                        "从动臂限幅位置读取",
+                        attempt,
+                        self.follower.bus,
+                    ),
+                )
+                goal = ensure_safe_goal_position(
+                    {
+                        name: (target, current[name])
+                        for name, target in goal.items()
+                    },
+                    max_relative_target,
+                )
+            self._bus_call_with_retry(
+                "从动臂目标写入",
+                lambda: self.follower.bus.sync_write("Goal_Position", goal),
+            )
+            return {f"{name}.pos": value for name, value in goal.items()}
+
+    def read_gripper_current_ma(self) -> float:
+        """读取 follower 夹爪电流；STS3215 每个原始计数为 6.5mA。"""
+        with self.lock:
+            if not self.follower:
+                raise RuntimeError("从动臂未连接")
+            raw = self._bus_call_with_retry(
+                "夹爪电流读取",
+                lambda: self.follower.bus.sync_read(
+                    "Present_Current",
+                    motors=["gripper"],
+                    normalize=False,
+                ),
+                lambda attempt: self._log_sync_read_diagnostic(
+                    "夹爪电流读取",
+                    attempt,
+                    self.follower.bus,
+                ),
+            )
+            return abs(int(raw["gripper"])) * CURRENT_MA_PER_COUNT
+
     def estop(self):
         """急停:从动臂断力矩。任何状态下可调用。"""
         with self.lock:
             self.torque_on = False
             if self.follower:
+                log.warning("触发急停保护:正在释放从动臂力矩")
                 try:
                     self.follower.bus.disable_torque()
                 except Exception:  # noqa: BLE001

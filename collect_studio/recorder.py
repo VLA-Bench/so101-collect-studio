@@ -17,6 +17,7 @@ import cv2
 from . import config_store, library
 from .arms import JOINTS, ArmManager
 from .cams import ROLES, CamManager
+from .gripper_protection import GripperProtection, validate_gripper_config
 from .paths import LIBRARY, STAGING
 
 log = logging.getLogger("recorder")
@@ -25,6 +26,7 @@ FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 CAMERA_READY_TIMEOUT = 10.0
 CAMERA_RETRY_AFTER = 2.0
 CONTROL_READY_TIMEOUT = 3.0
+GRIPPER_CURRENT_EVERY_N = 3
 
 
 class JpegWriter:
@@ -85,6 +87,10 @@ class RecordService:
         self._loop_error: str | None = None
         self._thread: threading.Thread | None = None
         self.last_error: str | None = None
+        self.gripper_protection = GripperProtection(
+            config_store.load()["gripper_protection"]
+        )
+        self.gripper = self.gripper_protection.snapshot()
 
     # ---------- teleop ----------
     def start_teleop(self):
@@ -98,6 +104,7 @@ class RecordService:
             self._cancel_start = False
             self.teleop_phase = "准备…"
             self.last_error = None
+            self._reset_gripper_state()
         threading.Thread(target=self._start_teleop_worker, daemon=True).start()
 
     def _start_teleop_worker(self):
@@ -169,7 +176,26 @@ class RecordService:
             self._thread.join(timeout=2)
             self._thread = None
         self.teleop_on = False
+        with self._lock:
+            self._reset_gripper_state()
         # 力矩保持,防止从动臂跌落;需要释放用急停/释放按钮
+
+    def _reset_gripper_state(self):
+        self.gripper_protection.reset()
+        self.gripper = self.gripper_protection.snapshot()
+
+    def update_gripper_config(self, config: dict) -> dict:
+        """校验、持久化并立即应用夹爪保护参数。"""
+        validated = validate_gripper_config(config)
+        config_store.update("gripper_protection", validated)
+        with self._lock:
+            self.gripper_protection.configure(validated)
+            self.gripper["protection_active"] = self.gripper_protection.active
+            self.gripper["hold_position"] = self.gripper_protection.hold_position
+            self.gripper["candidate_ms"] = 0.0
+            self.gripper["position_span"] = None
+            self.gripper["config"] = dict(self.gripper_protection.config)
+            return dict(self.gripper_protection.config)
 
     def _loop(self):
         fps = config_store.load()["record"]["fps"]
@@ -177,13 +203,38 @@ class RecordService:
         next_t = time.perf_counter()
         last_stat = time.perf_counter()
         n = 0
+        frame = 0
+        current_ma: float | None = None
         while not self._stop.is_set():
             try:
-                action = self.arms.leader.get_action()
-                self.arms.follower.send_action(action)
-                obs = self.arms.follower.bus.sync_read("Present_Position")
+                action = self.arms.read_leader_action()
+                obs = self.arms.read_follower_position()
+                now = time.monotonic()
+                if frame % GRIPPER_CURRENT_EVERY_N == 0:
+                    current_ma = self.arms.read_gripper_current_ma()
+                with self._lock:
+                    protected_target, gripper, event = self.gripper_protection.apply(
+                        action["gripper.pos"], obs["gripper"], current_ma, now
+                    )
+                safe_action = dict(action)
+                safe_action["gripper.pos"] = protected_target
+                sent_action = self.arms.send_action(safe_action)
+                if isinstance(sent_action, dict):
+                    gripper["applied_target"] = float(
+                        sent_action.get("gripper.pos", protected_target)
+                    )
+                with self._lock:
+                    self.gripper = gripper
+                if event == "activated":
+                    log.warning(
+                        "触发夹爪保护:位置=%.2f,请求=%.2f,电流=%.1fmA",
+                        obs["gripper"], action["gripper.pos"], current_ma,
+                    )
+                elif event == "released":
+                    log.info("夹爪保护已解除:主动臂已张开")
                 self._loop_ready.set()
                 if self.state == "rec":
+                    # 数据仍保存 leader 原始请求；安全目标只用于实际下发。
                     self._capture_frame(obs, action, period)
             except Exception as e:  # noqa: BLE001
                 log.exception("teleop loop error")
@@ -192,9 +243,12 @@ class RecordService:
                 self._loop_ready.set()
                 self.arms.estop()
                 self.teleop_on = False
+                with self._lock:
+                    self._reset_gripper_state()
                 if self.state != "idle":
                     self._pause_only()
                 return
+            frame += 1
             n += 1
             now = time.perf_counter()
             if now - last_stat >= 1.0:
@@ -359,6 +413,11 @@ class RecordService:
 
     # ---------- 状态 ----------
     def status(self) -> dict:
+        with self._lock:
+            gripper = {
+                **self.gripper,
+                "config": dict(self.gripper["config"]),
+            }
         return {
             "session": self.session,
             "teleop_on": self.teleop_on,
@@ -374,4 +433,5 @@ class RecordService:
             "jpeg_dropped": self.jpeg.dropped,
             "encoding": [j for j in self.encode_q if j["state"] != "done"][-3:],
             "error": self.last_error,
+            "gripper": gripper,
         }

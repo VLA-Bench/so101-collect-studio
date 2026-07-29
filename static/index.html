@@ -71,6 +71,11 @@
   table.joints td{padding:3px 8px;border-bottom:1px solid #1a2233;font-family:var(--mono);font-size:12px}
   .ok-t{color:var(--green)} .bad-t{color:var(--red)}
   .warn-note{margin-top:12px;font-size:12.5px;color:var(--amber);background:#2a2113;border:1px solid #4a3a1a;border-radius:8px;padding:8px 12px}
+  .protect-settings{display:grid;grid-template-columns:145px repeat(5,minmax(110px,1fr)) 116px;gap:10px;align-items:end;margin-top:12px}
+  .protect-settings label{font-size:11px;color:var(--dim)}
+  .protect-settings label span{display:block;margin-bottom:3px;white-space:nowrap}
+  .protect-toggle{align-self:center;color:var(--txt)!important;font-size:13px!important;display:flex;align-items:center;gap:8px}
+  .protect-toggle input{accent-color:var(--accent)}
 
   .cams{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1360px}
   .cam-card img{width:100%;aspect-ratio:4/3;border-radius:8px;background:#000;display:block;object-fit:cover}
@@ -87,6 +92,9 @@
   aside{width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
   aside section{padding:13px 16px;border-bottom:1px solid var(--line)}
   aside h3{font-size:12px;color:var(--dim);font-weight:600;letter-spacing:.6px;margin-bottom:9px;text-transform:uppercase}
+  .gripper-live{border-top:1px solid var(--line);margin-top:9px;padding-top:7px;font:11px/1.7 var(--mono);color:var(--dim)}
+  .gripper-live div{white-space:nowrap}
+  .gripper-live .active{color:var(--red);font-weight:700}
   .task{border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:8px;cursor:pointer;transition:.15s}
   .task:hover{border-color:#3a4a68}
   .task.sel{border-color:var(--accent);background:#12233299}
@@ -282,7 +290,21 @@
         </div>
       </div>
       <div class="card wide">
-        <b>③ 连接机械臂</b>
+        <b>③ 夹爪堵转保护</b>
+        <div class="sub" style="margin:4px 0 0">持续高电流且夹爪基本不动时,把实际下发目标锁在 follower 实测位置；leader 主动张开超过解除裕量后恢复跟随。参数单位为归一化关节值。</div>
+        <div class="protect-settings">
+          <label class="protect-toggle"><input id="gp-enabled" type="checkbox">启用保护</label>
+          <label><span>保护电流 / mA</span><input id="gp-current" type="number" min="0.1" step="1"></label>
+          <label><span>停滞窗口 / ms</span><input id="gp-window" type="number" min="1" step="10"></label>
+          <label><span>最大位置变化</span><input id="gp-change" type="number" min="0" max="100" step="0.1"></label>
+          <label><span>最小闭合误差</span><input id="gp-error" type="number" min="0" max="100" step="0.1"></label>
+          <label><span>张开解除裕量</span><input id="gp-release" type="number" min="0" max="100" step="0.1"></label>
+          <button id="gp-save" class="primary">保存并应用</button>
+        </div>
+        <div id="gp-msg" style="color:var(--dim);font-size:12px;margin-top:7px"></div>
+      </div>
+      <div class="card wide">
+        <b>④ 连接机械臂</b>
         <div class="sub" style="margin:4px 0 0">建立常驻连接(connect 后立即释放从动臂力矩,直到你在采集台开启遥操作)。</div>
         <div class="steprow">
           <button id="connect-btn" class="primary">连接两臂</button>
@@ -317,6 +339,10 @@
           <span class="k">批次</span><span class="v" id="sess-name">—</span>
           <span class="k">控制环</span><span class="v" id="loop-info">—</span>
           <span class="k">编码队列</span><span class="v" id="enc-info">空闲</span>
+        </div>
+        <div class="gripper-live">
+          <div id="gripper-line1">位置— · 请求— · 下发—</div>
+          <div id="gripper-line2">电流—mA · 保护待机</div>
         </div>
         <div class="steprow" style="margin-top:10px">
           <button id="teleop-btn" class="primary" style="width:100%">▶ 开始遥操作</button>
@@ -540,6 +566,7 @@ const S = {
   expSel: new Set(),         // 管理器勾选导出的 episode id
   lastErr: null,
   playing: true,
+  gripperConfigLoaded: false,
 };
 const liveIdx = () => deckEps().length;   // deck 只翻当前任务集合的 episode(需求3)
 const onLive = () => S.page === 'live' || S.page >= liveIdx();
@@ -644,6 +671,8 @@ function renderStatus(){
   $('loop-info').textContent = rec.teleop_on? `${rec.loop_hz} Hz · 超时 ${rec.overruns}` : '未运行';
   const encs=rec.encoding||[];
   $('enc-info').textContent = encs.length? encs.map(j=>j.id+':'+j.state).join(' '):'空闲';
+  renderGripper(rec);
+  loadGripperConfig(rec.gripper?.config);
   const tb=$('teleop-btn');
   if(rec.starting){
     tb.disabled=true; tb.className='primary';
@@ -668,6 +697,46 @@ function renderStatus(){
   $('st-trash').textContent=s.trash??0;
   $('st-min').textContent=s.minutes??0;
 }
+
+function gripperValue(value, digits=1){
+  return Number.isFinite(value)? Number(value).toFixed(digits) : '—';
+}
+function renderGripper(rec){
+  const g=rec.gripper||{}, cfg=g.config||{};
+  $('gripper-line1').textContent=`位置${gripperValue(g.position)} · 请求${gripperValue(g.requested_target)} · 下发${gripperValue(g.applied_target)}`;
+  const phase=!cfg.enabled?'关闭':(g.protection_active?'已触发':(rec.teleop_on?'监控':'待机'));
+  $('gripper-line2').textContent=`电流${gripperValue(g.current_ma,0)}mA · 保护${phase}`;
+  $('gripper-line2').className=g.protection_active?'active':'';
+}
+function loadGripperConfig(config, force=false){
+  if(!config || (S.gripperConfigLoaded&&!force)) return;
+  $('gp-enabled').checked=!!config.enabled;
+  $('gp-current').value=config.current_limit_ma;
+  $('gp-window').value=config.stall_window_ms;
+  $('gp-change').value=config.max_position_change;
+  $('gp-error').value=config.min_closing_error;
+  $('gp-release').value=config.release_margin;
+  S.gripperConfigLoaded=true;
+}
+$('gp-save').onclick=async()=>{
+  const config={
+    enabled:$('gp-enabled').checked,
+    current_limit_ma:$('gp-current').valueAsNumber,
+    stall_window_ms:$('gp-window').valueAsNumber,
+    max_position_change:$('gp-change').valueAsNumber,
+    min_closing_error:$('gp-error').valueAsNumber,
+    release_margin:$('gp-release').valueAsNumber,
+  };
+  try{
+    const saved=await api('/api/config/gripper-protection',{method:'PUT',body:JSON.stringify(config)});
+    loadGripperConfig(saved,true);
+    $('gp-msg').textContent='已保存并应用';
+    toast('夹爪保护参数已保存','g');
+  }catch(e){
+    $('gp-msg').textContent='';
+    toast('夹爪保护参数无效:'+e.message,'r');
+  }
+};
 
 $('calib-btn').onclick = async ()=>{
   try{

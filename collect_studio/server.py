@@ -175,6 +175,15 @@ class RecStartReq(BaseModel):
     task_set: str | None = None  # 任务所属集合;空 = 合并列表里第一个匹配 slug 的任务
 
 
+class GripperProtectionReq(BaseModel):
+    enabled: bool
+    current_limit_ma: float
+    stall_window_ms: float
+    max_position_change: float
+    min_closing_error: float
+    release_margin: float
+
+
 @app.post("/api/rec/start")
 def rec_start(req: RecStartReq):
     if req.task_set:
@@ -213,6 +222,14 @@ def rec_discard():
         rec.discard()
         return {"ok": True}
     except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)) from e
+
+
+@app.put("/api/config/gripper-protection")
+def gripper_protection_update(req: GripperProtectionReq):
+    try:
+        return rec.update_gripper_config(req.model_dump())
+    except (ValueError, OSError) as e:
         raise HTTPException(400, str(e)) from e
 
 

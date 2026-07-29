@@ -60,7 +60,7 @@ class CameraLifecycleTest(unittest.TestCase):
 
 
 class FakeBus:
-    def sync_read(self, _):
+    def sync_read(self, _, **_kwargs):
         return {joint: 0.0 for joint in JOINTS}
 
 
@@ -68,9 +68,12 @@ class FakeFollower:
     def __init__(self):
         self.bus = FakeBus()
         self.sent = 0
+        self.last_action = None
 
-    def send_action(self, _):
+    def send_action(self, action):
         self.sent += 1
+        self.last_action = dict(action)
+        return dict(action)
 
 
 class FakeLeader:
@@ -87,12 +90,39 @@ class FakeArms:
         self.leader = FakeLeader()
         self.follower = FakeFollower()
         self.torque_on = False
+        self.current_reads = 0
+
+    def read_leader_action(self):
+        return self.leader.get_action()
+
+    def read_follower_position(self):
+        return self.follower.bus.sync_read("Present_Position")
+
+    def send_action(self, action):
+        return self.follower.send_action(action)
 
     def enable_torque(self):
         self.torque_on = True
 
     def estop(self):
         self.torque_on = False
+
+    def read_gripper_current_ma(self):
+        self.current_reads += 1
+        return 0.0
+
+
+class FailingArms(FakeArms):
+    def __init__(self):
+        super().__init__()
+        self.estop_calls = 0
+
+    def read_leader_action(self):
+        raise ConnectionError("主动臂连续通信失败")
+
+    def estop(self):
+        super().estop()
+        self.estop_calls += 1
 
 
 class ReadyCams:
@@ -154,6 +184,17 @@ class TeleopStartupTest(unittest.TestCase):
         self.assertFalse(service.teleop_on)
         self.assertIn("right_rear(超过 3s 未收到帧)", service.last_error)
         self.assertEqual(cameras.retries, 1)
+
+    def test_persistent_arm_failure_estops(self):
+        arms = FailingArms()
+        service = recorder_module.RecordService(arms, ReadyCams())
+        with self.assertLogs("recorder", level="ERROR"):
+            service.start_teleop()
+            self.wait_for_start(service)
+
+        self.assertFalse(service.teleop_on)
+        self.assertIn("主动臂连续通信失败", service.last_error)
+        self.assertGreaterEqual(arms.estop_calls, 1)
 
 
 class PreviewTransportTest(unittest.TestCase):
