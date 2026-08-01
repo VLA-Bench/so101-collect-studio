@@ -6,7 +6,7 @@ arms:
     serial: 5B41532784
     id: my_awesome_follower_arm
 cameras:
-  wrist: '0x111400029930858'
+  wrist: '0x111100029930858'
   left_rear: '0x11120000bda1376'
   right_rear: '0x11130000bda1376'
 record:
