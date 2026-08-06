@@ -50,5 +50,32 @@ class ExportSelectionTest(unittest.TestCase):
         self.assertEqual(len(exporter._selected_episodes([])), 3)
 
 
+class UnitsMetadataTest(unittest.TestCase):
+    """info.json 的 units 字段:逐 feature 物理量说明,与仿真数据集对齐。"""
+
+    def test_units_covers_all_features(self):
+        units = exporter.build_units_json("base")
+        self.assertEqual(set(units), {
+            "observation.pos_state", "pos_action",
+            "observation.eef_state", "eef_action",
+            "timestamp", "frame_index", "episode_index", "index", "task_index",
+            *(f"observation.images.{r}" for r in exporter.ROLES),
+        })
+
+    def test_joint_units_are_normalized_not_radian(self):
+        units = exporter.build_units_json("base")
+        self.assertEqual(units["observation.pos_state"]["unit"], "normalized_m100_100")
+        self.assertEqual(units["pos_action"]["quantity"], "absolute_joint_position_target")
+        self.assertEqual(units["pos_action"]["component_order"], exporter.JOINT_ORDER)
+
+    def test_eef_units_match_fk_convention(self):
+        units = exporter.build_units_json("base")
+        eef = units["observation.eef_state"]
+        self.assertEqual(eef["coordinate_frame"], "robot_base")
+        self.assertEqual(eef["rotation_representation"], "euler_rpy")
+        self.assertEqual(eef["rotation_continuity"], "wrapped_to_pi_no_unwrap")
+        self.assertEqual(eef["component_layout"][6]["unit"], "normalized_0_100")
+
+
 if __name__ == "__main__":
     unittest.main()

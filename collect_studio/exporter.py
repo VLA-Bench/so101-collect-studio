@@ -33,6 +33,58 @@ EEF_NAMES = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
 
 JOB = {"state": "idle"}  # idle|running|done|error
 
+JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+
+
+def build_units_json(delta_frame: str) -> dict:
+    """逐 feature 的物理量说明(GR00T N1.6 info.json `units` 约定,与仿真数据集对齐)。
+
+    注意与仿真数据集的差异(如实描述,不照抄):
+      - pos_state / pos_action 为 RANGE_M100_100 归一化值(非弧度);
+      - eef 的 gripper 通道为 0–100 归一化(与关节第 6 维同值);
+      - 欧拉角包裹在 [-pi, pi](不做 episode 内解卷绕)。
+    """
+    def eef(quantity: str) -> dict:
+        return {
+            "quantity": quantity,
+            "coordinate_frame": "robot_base" if delta_frame == "base" else f"robot_{delta_frame}",
+            "component_layout": [
+                {"name": "x", "unit": "meter"}, {"name": "y", "unit": "meter"},
+                {"name": "z", "unit": "meter"}, {"name": "roll", "unit": "radian"},
+                {"name": "pitch", "unit": "radian"}, {"name": "yaw", "unit": "radian"},
+                {"name": "gripper", "unit": "normalized_0_100"},
+            ],
+            "rotation_representation": "euler_rpy",
+            "rotation_convention": "extrinsic_xyz_Rz_yaw_Ry_pitch_Rx_roll",
+            "rotation_unit": "radian",
+            "rotation_continuity": "wrapped_to_pi_no_unwrap",
+            "position_unit": "meter",
+            "gripper_quantity": "gripper_normalized_position",
+            "gripper_unit": "normalized_0_100",
+            "fk_source": "so101_new_calib.urdf (base -> gripper_frame_link)",
+        }
+    joint_norm = {
+        "quantity": "joint_position",
+        "unit": "normalized_m100_100",
+        "note": "LeRobot MotorNormMode.RANGE_M100_100,弧度值需经校准反算(见 fk.py)",
+        "component_order": JOINT_ORDER,
+    }
+    return {
+        "observation.pos_state": {**joint_norm, "quantity": "joint_position"},
+        "pos_action": {**joint_norm, "quantity": "absolute_joint_position_target"},
+        "observation.eef_state": eef("tcp_pose_from_observed_joint_position"),
+        "eef_action": eef("tcp_pose_from_absolute_joint_position_target"),
+        "timestamp": {"quantity": "episode_time", "unit": "second",
+                      "source": "frame_index_divided_by_fps"},
+        "frame_index": {"quantity": "episode_frame_index", "unit": "count"},
+        "episode_index": {"quantity": "episode_index", "unit": "count"},
+        "index": {"quantity": "global_frame_index", "unit": "count"},
+        "task_index": {"quantity": "categorical_task_index", "unit": "none"},
+        **{f"observation.images.{r}": {"quantity": "rgb_image", "value_type": "uint8",
+                                        "value_range": [0, 255], "channel_order": "RGB",
+                                        "spatial_unit": "pixel"} for r in ROLES},
+    }
+
 
 def build_modality_json() -> dict:
     """GR00T modality 映射,与 so101-nexus `build_modality_json()` 同结构。
@@ -248,6 +300,8 @@ def _run(name: str, selection, delta_frame: str):
             "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
             "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
             "features": features,
+            # 逐 feature 物理量说明(GR00T N1.6 约定,与仿真数据集 info.json 对齐)
+            "units": build_units_json(delta_frame),
             # 自定义扩展说明
             "eef": {
                 "frame": delta_frame,
