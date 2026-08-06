@@ -82,7 +82,7 @@ class EpisodeManageTest(unittest.TestCase):
     def test_reassign_inside_trash_stays_in_trash(self):
         _mk_ep(self.trash, "old_task", "s1", "episode_000004", prompt="Old task")
         m = library.update_episode("episode_000004", task_slug="new_task")
-        self.assertTrue((self.trash / "new_task" / "s1" / "episode_000004").exists())
+        self.assertTrue((self.trash / "默认" / "new_task" / "s1" / "episode_000004").exists())
         self.assertEqual(m["status"], "trash")
 
     def test_update_rejects_empty_prompt(self):
