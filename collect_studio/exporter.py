@@ -17,7 +17,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from . import fk, library
+from . import fk, library, tic_tac_toe
 from .paths import EXPORTS
 
 log = logging.getLogger("exporter")
@@ -142,6 +142,20 @@ def _selected_episodes(selection):
     return eps
 
 
+def _tic_tac_toe_export_entry(episode_index: int, episode: dict) -> dict | None:
+    """把真实 episode 的井字棋实例身份转换为导出 sidecar 行。"""
+    meta = episode.get("tic_tac_toe")
+    if not isinstance(meta, dict):
+        return None
+    required = {
+        "manifest_sha256", "selection", "selection_index", "state_id",
+        "layout_seed", "side_to_move", "tactic", "optimal_cell",
+    }
+    if not required <= meta.keys():
+        return None
+    return {"episode_index": episode_index, "source_episode_id": episode["id"], **meta}
+
+
 def _stats_entry(arr: np.ndarray) -> dict:
     return {
         "min": arr.min(axis=0).tolist(),
@@ -199,7 +213,7 @@ def _run(name: str, selection, delta_frame: str):
         fps = eps[0]["fps"]
         w, h = eps[0]["width"], eps[0]["height"]
 
-        episodes_jsonl, stats_jsonl = [], []
+        episodes_jsonl, stats_jsonl, tic_tac_toe_jsonl = [], [], []
         total_frames = 0
         checks = {"frame_mismatch": [], "eef_action_state_gap_max": 0.0,
                   "eef_euler_abs_max": 0.0, "eef_gripper_err_max": 0.0}
@@ -262,6 +276,9 @@ def _run(name: str, selection, delta_frame: str):
 
             episodes_jsonl.append({"episode_index": ei, "tasks": [e["task_prompt"]], "length": n})
             stats_jsonl.append({"episode_index": ei, "stats": ep_stats})
+            tic_tac_toe_entry = _tic_tac_toe_export_entry(ei, e)
+            if tic_tac_toe_entry:
+                tic_tac_toe_jsonl.append(tic_tac_toe_entry)
             global_idx += n
             total_frames += n
 
@@ -325,6 +342,10 @@ def _run(name: str, selection, delta_frame: str):
         with open(out / "meta" / "episodes_stats.jsonl", "w") as f:
             for x in stats_jsonl:
                 f.write(json.dumps(x) + "\n")
+        if tic_tac_toe_jsonl:
+            with open(out / "meta" / "tic_tac_toe_collection.jsonl", "w") as f:
+                for x in tic_tac_toe_jsonl:
+                    f.write(json.dumps(x, ensure_ascii=False) + "\n")
 
         report = {
             "episodes": len(eps), "frames": total_frames, "tasks": len(task_prompts),
@@ -338,6 +359,14 @@ def _run(name: str, selection, delta_frame: str):
                    and checks["eef_gripper_err_max"] < 1e-6),
             "path": str(out),
         }
+        if tic_tac_toe_jsonl:
+            indexes = [row["selection_index"] for row in tic_tac_toe_jsonl]
+            report["tic_tac_toe"] = {
+                "manifest_sha256": tic_tac_toe.SOURCE_MANIFEST_SHA256,
+                "episodes": len(indexes),
+                "unique_instances": len(set(indexes)),
+                "duplicate_indices": sorted({index for index in indexes if indexes.count(index) > 1}),
+            }
         (out / "meta" / "validation_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
         JOB.update({"state": "done", "progress": 100, "msg": "完成", "report": report})
     except Exception as e:  # noqa: BLE001

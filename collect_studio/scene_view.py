@@ -148,13 +148,20 @@ def read_current() -> dict | None:
         return None
 
 
-def write_current(task_set: str | None, task_slug: str | None, prompt: str) -> dict:
+def write_current(
+    task_set: str | None,
+    task_slug: str | None,
+    prompt: str,
+    selection_index: int | None = None,
+) -> dict:
     data = {
         "task_set": task_set,
         "task_slug": task_slug,
         "prompt": prompt,
         "ts": time.time(),
     }
+    if selection_index is not None:
+        data["selection_index"] = selection_index
     try:
         CURRENT_DISPLAY_JSON.parent.mkdir(parents=True, exist_ok=True)
         tmp = CURRENT_DISPLAY_JSON.with_suffix(".tmp")

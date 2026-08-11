@@ -17,6 +17,7 @@ TASKS_JSON = DATA_ROOT / "tasks.json"
 COUNTER_JSON = DATA_ROOT / "counter.json"
 CURRENT_DISPLAY_JSON = DATA_ROOT / "current_display.json"  # 场景展示页:采集台当前选中任务
 SCENES_JSON = DATA_ROOT / "scenes.json"  # 场景与场景任务的唯一权威数据源
+TIC_TAC_TOE_MANIFEST = APP_ROOT / "configs" / "tic_tac_toe_v1_seed42.json"  # 冻结的 300 条棋局实例
 
 LEROBOT_CALIB = Path.home() / ".cache" / "huggingface" / "lerobot" / "calibration"
 

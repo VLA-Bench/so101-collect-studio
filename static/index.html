@@ -110,6 +110,29 @@
   .tfold{flex:1;padding:5px;font-size:12px}
   .addtask{display:flex;gap:6px;margin-top:4px}
   .addtask button{padding:7px 10px;flex:none}
+  .ttt-nav{border:1px solid var(--line);border-radius:10px;padding:10px;background:#0d1220}
+  .ttt-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px}
+  .ttt-head b{font:700 17px var(--mono);color:var(--accent)}
+  .ttt-head span{font:11px var(--mono);color:var(--green)}
+  .ttt-state{font-size:12px;line-height:1.55;margin-bottom:8px}
+  .ttt-state .mono{font-size:10px;color:var(--dim);word-break:break-all}
+  .ttt-board{margin:6px auto 8px;max-width:112px}
+  .ttt-board-side{text-align:center;font-size:10px;color:var(--dim);line-height:1.3}
+  .ttt-board-cols{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;font-size:10px;color:var(--dim);margin:2px 0}
+  .ttt-board-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:#676d71;border:3px solid #676d71;border-radius:5px;overflow:hidden}
+  .ttt-cell{position:relative;display:grid;place-items:center;aspect-ratio:1;background:#a8adaf}
+  .ttt-cell.target{background:#e5c7b9;box-shadow:inset 0 0 0 2px var(--amber)}
+  .ttt-piece{display:block;width:55%;height:55%;border-radius:4px;box-shadow:0 2px 3px #0005}
+  .ttt-piece.black{background:#171717;border:1px solid #050505}
+  .ttt-piece.white{background:#f7f5ee;border:1px solid #aaa}
+  .ttt-piece.ghost{opacity:.42;box-shadow:none}
+  .ttt-target-tag{position:absolute;right:2px;bottom:1px;color:#7f351d;font-size:8px;font-weight:700}
+  .ttt-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:6px}
+  .ttt-actions button{padding:5px 3px;font-size:11px}
+  .ttt-jump{display:flex;gap:5px}
+  .ttt-jump input{min-width:0;padding:5px 7px;font:12px var(--mono)}
+  .ttt-jump button{padding:5px 8px;font-size:11px;flex:none}
+  .ttt-lock{margin-top:7px;font-size:11px;color:var(--amber)}
   .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
   .stat{background:var(--panel2);border-radius:8px;padding:8px 4px}
   .stat b{display:block;font-size:19px;font-family:var(--mono)}
@@ -350,10 +373,10 @@
         <div style="font-size:11px;color:var(--dim);margin-top:6px">开启瞬间从动臂会跟随主动臂当前位姿,请先把主动臂摆到接近从动臂的姿态。</div>
       </section>
       <section>
-        <h3>任务(<kbd>T</kbd> 轮换)<a href="/scene" target="_blank" style="float:right;font-size:11px;font-weight:400">场景展示页 ⧉</a></h3>
+        <h3>任务(<kbd>T</kbd> 轮换)<a id="display-link" href="/scene" target="_blank" style="float:right;font-size:11px;font-weight:400">场景展示页 ⧉</a></h3>
         <select id="taskset-sel" style="margin-bottom:6px"></select>
         <div id="tasklist"></div>
-        <div class="addtask">
+        <div class="addtask" id="task-add-row">
           <input type="text" id="newtask" placeholder="新任务提示词…">
           <button id="addtask-btn">＋</button>
           <button id="importtask-btn" title="从 tasks.jsonl 批量导入任务">导入</button>
@@ -567,9 +590,88 @@ const S = {
   lastErr: null,
   playing: true,
   gripperConfigLoaded: false,
+  ttt: null,                 // 井字棋 300 条实例当前状态与进度
+  tttInitialized: false,
+  tttAwaiting: null,         // 已保存、等待编码入库后自动推进的 selection_index
+  tttSwitching: false,
+  tttRefreshing: false,
+  tttLastPoll: 0,
 };
 const liveIdx = () => deckEps().length;   // deck 只翻当前任务集合的 episode(需求3)
 const onLive = () => S.page === 'live' || S.page >= liveIdx();
+const isTicTacToe = () => S.taskSet === 'tic_tac_toe';
+
+function tttNextIncomplete(fromIndex, data=S.ttt){
+  if(!data || !data.total || data.progress.remaining===0) return null;
+  const done=new Set(data.progress.completed_indices||[]);
+  for(let offset=1;offset<=data.total;offset++){
+    const index=(fromIndex+offset+data.total)%data.total;
+    if(!done.has(index)) return index;
+  }
+  return null;
+}
+
+function syncTttTask(){
+  const current=S.ttt?.current;
+  if(!current) return;
+  S.curTask=`tic_tac_toe::${current.task_slug}`;
+  localStorage.setItem('curTask',S.curTask);
+}
+
+async function switchTicTacToe(selectionIndex,{quiet=false}={}){
+  if(S.tttSwitching) return;
+  S.tttSwitching=true;
+  try{
+    S.ttt=await post('/api/tic-tac-toe/current',{selection_index:selectionIndex});
+    S.tttInitialized=true;
+    syncTttTask();
+    S.page='live';
+    renderTasks();
+    if(S.step===3) renderDeck();
+  }catch(e){ if(!quiet) toast(e.message,'r'); }
+  finally{ S.tttSwitching=false; }
+}
+
+async function refreshTicTacToe({initialize=false}={}){
+  if(!isTicTacToe() || S.tttRefreshing) return;
+  S.tttRefreshing=true;
+  try{
+    const data=await api('/api/tic-tac-toe/current');
+    const previousCurrent=S.ttt?.current;
+    const completedAfterEncoding=!!(
+      previousCurrent?.encoding
+      && previousCurrent.selection_index===data.current?.selection_index
+      && data.current.completed
+    );
+    S.ttt=data;
+    if((initialize||!S.tttInitialized) && (!data.current || data.current.completed)){
+      const next=tttNextIncomplete(data.current?.selection_index??-1,data);
+      if(next!==null){
+        S.tttRefreshing=false;
+        await switchTicTacToe(next,{quiet:true});
+        return;
+      }
+    }
+    S.tttInitialized=true;
+    syncTttTask();
+    const awaitingCurrent=S.tttAwaiting!==null && data.current?.selection_index===S.tttAwaiting;
+    if((awaitingCurrent||completedAfterEncoding) && data.current?.completed){
+      const next=tttNextIncomplete(data.current.selection_index,data);
+      S.tttAwaiting=null;
+      if(next!==null){
+        S.tttRefreshing=false;
+        await switchTicTacToe(next,{quiet:true});
+        toast(`棋局已入库,当前切换到 #${String(next+1).padStart(3,'0')}`,'g');
+        return;
+      }
+      toast('✓ 井字棋 300 条采集已全部完成','g');
+    }else if(awaitingCurrent && data.current?.status==='error'){
+      S.tttAwaiting=null;  // 保持当前项,由现有录制错误提示说明原因
+    }
+    renderTasks();
+  }catch(e){}
+  finally{ S.tttRefreshing=false; }
+}
 
 /* ================= step 切换 ================= */
 function gotoStep(n){
@@ -620,6 +722,10 @@ async function poll(){
     S.status = await api('/api/status');
     checkRecSound();
     renderStatus();
+    if(isTicTacToe() && Date.now()-S.tttLastPoll>=1000){
+      S.tttLastPoll=Date.now();
+      refreshTicTacToe();
+    }
   }catch(e){ $('foot-msg').textContent='后端连接断开…'; }
   setTimeout(poll, 500);
 }
@@ -865,6 +971,9 @@ function renderSetSelectors(){
 const tkey=t=>(t.set||'默认')+'::'+t.slug;
 function curTask(){
   const ts=taskList(); if(!ts.length) return null;
+  if(isTicTacToe() && S.ttt?.current){
+    return ts.find(t=>t.slug===S.ttt.current.task_slug)||null;
+  }
   return ts.find(t=>tkey(t)===S.curTask) || ts.find(t=>t.slug===S.curTask) || ts[0];
 }
 /* deck(右侧预览/翻页/strip)只包含当前任务集合的 episode(需求3);
@@ -878,6 +987,7 @@ function deckEps(){
 }
 /* 场景展示页:上报当前选中任务(fire-and-forget,失败静默,后端落盘为准) */
 function reportDisplay(){
+  if(isTicTacToe()) return;  // 井字棋由 selection_index 专用接口上报
   const t=curTask(); if(!t) return;
   post('/api/display/current',{task_set:t.set||'默认',task_slug:t.slug,prompt:t.prompt}).catch(()=>{});
 }
@@ -898,8 +1008,68 @@ function sortedTasks(){
   return ts;
 }
 const TASK_FOLD_N=2;  /* 每组折叠时只显示前 2 个(正序/倒序均按显示顺序取前 2) */
+function renderTicTacToeTasks(el){
+  const data=S.ttt, current=data?.current, rec=S.status?.rec;
+  const locked=S.tttSwitching || rec?.state!=='idle' || !!current?.encoding;
+  const key=JSON.stringify([
+    current?.selection_index,data?.progress?.completed,current?.status,locked,S.tttSwitching,
+  ]);
+  if(el.dataset.tttKey===key) return;
+  el.dataset.tttKey=key;
+  if(!current){
+    el.innerHTML='<div class="ttt-nav"><span style="color:var(--dim)">正在加载 300 条棋局…</span></div>';
+    return;
+  }
+  const num=String(current.display_number).padStart(3,'0');
+  const side=current.side_to_move==='black'?'执黑':'执白';
+  const status=current.completed?'已完成':current.status==='error'?'编码失败':current.encoding?'编码中':'待采集';
+  const boardCells=current.board.map((piece,index)=>{
+    const target=index===current.optimal_cell;
+    const color=piece||(target?current.side_to_move:null);
+    const label=piece?(piece==='black'?'已有黑棋':'已有白棋'):(target?`${side}目标落子`:'空格');
+    return `<div class="ttt-cell${target?' target':''}" aria-label="${label}" title="${label}">
+      ${color?`<i class="ttt-piece ${color}${target&&!piece?' ghost':''}"></i>`:''}
+      ${target?'<small class="ttt-target-tag">目标</small>':''}</div>`;
+  }).join('');
+  el.innerHTML=`<div class="ttt-nav">
+    <div class="ttt-head"><b>#${num} / ${data.total}</b><span>${data.progress.completed} / ${data.total} 已完成</span></div>
+    <div class="ttt-state"><div>${side} · ${current.task_slug} · ${current.tactic_label}</div>
+      <div>目标格：<b>${current.optimal_cell} · ${current.optimal_cell_label}</b> · ${status}</div>
+      <div class="mono">${current.state_id}</div></div>
+    <div class="ttt-board" aria-label="当前井字棋棋盘示意图">
+      <div class="ttt-board-side">远侧（棋盘后方）</div>
+      <div class="ttt-board-cols"><span>左</span><span>中</span><span>右</span></div>
+      <div class="ttt-board-grid">${boardCells}</div>
+      <div class="ttt-board-side">近侧（操作者）</div>
+    </div>
+    <div class="ttt-actions"><button data-ttt="prev" ${locked||current.selection_index===0?'disabled':''}>← 上一个</button>
+      <button data-ttt="next" ${locked||current.selection_index===data.total-1?'disabled':''}>下一个 →</button>
+      <button data-ttt="missing" ${locked||data.progress.remaining===0?'disabled':''}>下一未完成</button></div>
+    <div class="ttt-jump"><input id="ttt-jump" type="number" min="1" max="${data.total}" placeholder="编号 1-${data.total}" ${locked?'disabled':''}>
+      <button id="ttt-jump-go" ${locked?'disabled':''}>跳转</button></div>
+    ${locked?`<div class="ttt-lock">${current.encoding?'当前实例正在编码，完成后自动推进':'录制或暂停期间已锁定当前棋局'}</div>`:''}
+  </div>`;
+  el.querySelector('[data-ttt="prev"]')?.addEventListener('click',()=>switchTicTacToe(current.selection_index-1));
+  el.querySelector('[data-ttt="next"]')?.addEventListener('click',()=>switchTicTacToe(current.selection_index+1));
+  el.querySelector('[data-ttt="missing"]')?.addEventListener('click',()=>{
+    const next=tttNextIncomplete(current.selection_index,data); if(next!==null) switchTicTacToe(next);
+  });
+  const jump=()=>{
+    const value=Number($('ttt-jump')?.value);
+    if(Number.isInteger(value)&&value>=1&&value<=data.total) switchTicTacToe(value-1);
+  };
+  $('ttt-jump-go')?.addEventListener('click',jump);
+  $('ttt-jump')?.addEventListener('keydown',event=>{ if(event.key==='Enter'){event.preventDefault();jump();} });
+}
+
 function renderTasks(){
   const el=$('tasklist'); if(!el) return;
+  const ttt=isTicTacToe();
+  $('task-add-row').style.display=ttt?'none':'flex';
+  $('display-link').href=ttt?'/tic-tac-toe':'/scene';
+  $('display-link').textContent=ttt?'棋局展示页 ⧉':'场景展示页 ⧉';
+  if(ttt){ renderTicTacToeTasks(el); return; }
+  delete el.dataset.tttKey;
   // 场景派生集合只读:禁用添加/导入(由 /scene 制定模式编辑,服务端同样拒绝)
   const sceneSet=(S.status?.scene_sets||[]).includes(S.taskSet);
   const sceneHint='该集合由场景生成,请在场景展示页的制定模式编辑';
@@ -972,7 +1142,12 @@ function renderTasks(){
     }
   }
 }
-$('taskset-sel').onchange=e=>{ S.taskSet=e.target.value; localStorage.setItem('taskSet',S.taskSet); S.page='live'; renderTasks(); if(S.step===3) renderDeck(); reportDisplay(); };
+$('taskset-sel').onchange=async e=>{
+  S.taskSet=e.target.value; localStorage.setItem('taskSet',S.taskSet); S.page='live';
+  S.tttInitialized=false; S.tttAwaiting=null;
+  renderTasks(); if(S.step===3) renderDeck();
+  if(isTicTacToe()) await refreshTicTacToe({initialize:true}); else reportDisplay();
+};
 $('addtask-btn').onclick=async()=>{
   const v=$('newtask').value.trim(); if(!v) return;
   try{ const t=await post('/api/tasks',{prompt:v,set:S.taskSet==='全部'?null:S.taskSet});
@@ -1002,10 +1177,13 @@ function renderDeck(){
   if(live){
     S.page='live';
     $('pageind').innerHTML=`<b>LIVE</b> <span style="color:var(--dim)">· 第 ${liveIdx()+1} / ${liveIdx()+1} 页</span>`;
-    $('pagemeta').textContent='task: '+(curTask()? tkey(curTask()).replace('::','/') :'—');
+    const tttCurrent=isTicTacToe()?S.ttt?.current:null;
+    $('pagemeta').textContent=tttCurrent
+      ?`棋局 #${String(tttCurrent.display_number).padStart(3,'0')} · ${tttCurrent.task_slug} · 目标 ${tttCurrent.optimal_cell_label}`
+      :'task: '+(curTask()? tkey(curTask()).replace('::','/') :'—');
     // 提示词前加与左侧任务列表一致的文件顺序号,方便定位
     const ct=curTask();
-    const cid=ct?(sortedTasks().find(x=>tkey(x.t)===tkey(ct))||{}).id:null;
+    const cid=tttCurrent?.display_number || (ct?(sortedTasks().find(x=>tkey(x.t)===tkey(ct))||{}).id:null);
     feeds.innerHTML = FEED_LAYOUT.map(([r,cls])=>
       `<div class="feed ${cls}"><img data-preview-url="/frame/role/${r}.jpg" alt="${r} 实时画面"><span class="tag">${r.toUpperCase()} · 640×480@30</span></div>`).join('')
       +`<div class="rec-ov" id="rec-ov"><i class="rdot"></i><span id="rec-txt">待机</span></div>`
@@ -1081,6 +1259,11 @@ function renderLiveCtrl(){
   const btn=$('recbtn');
   btn.className= rec.state==='rec'?'rec': rec.state==='paused'?'paused':'primary';
   btn.textContent= rec.state==='idle'?'● 开始录制': rec.state==='rec'?'❚❚ 暂停':'▶ 继续';
+  const tttBlocked=isTicTacToe() && rec.state==='idle'
+    && (!S.ttt?.current || S.ttt.current.completed || S.ttt.current.encoding);
+  btn.disabled=tttBlocked;
+  if(tttBlocked) btn.title=S.ttt?.current?.completed?'该棋局已有有效 episode，重采前请先标废':'棋局尚未就绪或正在编码';
+  else btn.title='';
   $('timer').textContent=fmtT(rec.elapsed);
   $('framecnt').textContent=rec.frames+' 帧'+(rec.jpeg_backlog>60?` · 积压${rec.jpeg_backlog}`:'');
   $('savebtn').disabled=$('dropbtn').disabled= rec.state==='idle';
@@ -1141,6 +1324,7 @@ async function recToggle(){
   try{
     if(rec.state==='rec') await post('/api/rec/pause');
     else{
+      if(isTicTacToe() && !S.ttt?.current) return toast('井字棋实例尚未就绪','r');
       const t=curTask(); if(!t) return toast('请先创建任务','r');
       await post('/api/rec/start',{task_slug:t.slug,task_set:t.set||null});
     }
@@ -1150,6 +1334,7 @@ async function recToggle(){
 async function recSave(){
   try{
     const m=await post('/api/rec/save');
+    if(isTicTacToe() && S.ttt?.current) S.tttAwaiting=S.ttt.current.selection_index;
     toast(`✓ ${m.id} 已保存(${m.frames} 帧,后台编码中)`,'g');
     await refreshEpisodes();
   }catch(e){ toast(e.message,'r'); }
@@ -1381,6 +1566,11 @@ document.addEventListener('keydown',e=>{
     case 'End': e.preventDefault(); flipTo('live','r'); break;
     case 'g': case 'G': $('jump-bg').classList.add('open'); $('jump-input').value=''; setTimeout(()=>$('jump-input').focus(),50); break;
     case 't': case 'T': {
+      if(isTicTacToe()){
+        const current=S.ttt?.current, next=current?tttNextIncomplete(current.selection_index):null;
+        if(next!==null) switchTicTacToe(next);
+        break;
+      }
       const ts=taskList(); if(!ts.length) break;
       const cur=curTask(); const i=(ts.findIndex(x=>tkey(x)===tkey(cur))+1)%ts.length;
       setCurTask(ts[i]);

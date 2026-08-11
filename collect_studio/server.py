@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import config_store, exporter, library, scene_view, scenes
+from . import config_store, exporter, library, scene_view, scenes, tic_tac_toe
 from .arms import ArmManager
 from .cams import CamManager
 from .paths import ASSETS, STATIC
@@ -195,6 +195,22 @@ def rec_start(req: RecStartReq):
         task = next((t for t in library.load_tasks() if t["slug"] == req.task_slug), None)
     if not task:
         raise HTTPException(404, f"任务 {req.task_slug} 不存在")
+    if req.task_set == tic_tac_toe.TASK_SET:
+        current = scene_view.read_current()
+        if not current or current.get("task_set") != tic_tac_toe.TASK_SET:
+            raise HTTPException(400, "请先选择井字棋采集实例")
+        try:
+            row = tic_tac_toe.instance(int(current["selection_index"]))
+        except (KeyError, TypeError, ValueError, IndexError) as e:
+            raise HTTPException(400, "当前井字棋采集实例无效") from e
+        if req.task_slug != row["task_slug"]:
+            raise HTTPException(400, f"当前棋局应使用任务 {row['task_slug']}")
+        done = tic_tac_toe.progress(library.list_episodes())["completed_indices"]
+        if row["selection_index"] in done:
+            raise HTTPException(400, "当前棋局已有有效 episode,重采前请先标废")
+        if rec.tic_tac_toe_pending(row["selection_index"]):
+            raise HTTPException(400, "当前棋局正在后台编码,请等待完成")
+        task = {**task, "tic_tac_toe": tic_tac_toe.episode_metadata(row)}
     try:
         rec.rec_start(task)
         return rec.status()
@@ -403,6 +419,77 @@ def display_current(req: DisplayCurrentReq):
     return scene_view.write_current(req.task_set, req.task_slug, req.prompt)
 
 
+# ============ 井字棋 300 条实例(采集端控制,展示端只读) ============
+class TicTacToeCurrentReq(BaseModel):
+    selection_index: int
+
+
+def _tic_tac_toe_payload() -> dict:
+    instances = tic_tac_toe.load_instances()
+    progress = tic_tac_toe.progress(library.list_episodes())
+    current = scene_view.read_current()
+    payload = {
+        "schema": tic_tac_toe.SNAPSHOT_SCHEMA,
+        "manifest_sha256": tic_tac_toe.SOURCE_MANIFEST_SHA256,
+        "selection": tic_tac_toe.SELECTION,
+        "total": len(instances),
+        "progress": progress,
+        "current": None,
+    }
+    if not current or current.get("task_set") != tic_tac_toe.TASK_SET:
+        return payload
+    try:
+        row = tic_tac_toe.instance(int(current["selection_index"]))
+        task = tic_tac_toe.resolve_task(row, library.load_tasks(tic_tac_toe.TASK_SET))
+    except (KeyError, TypeError, ValueError, IndexError, FileNotFoundError):
+        return payload
+    index = row["selection_index"]
+    completed = index in progress["completed_indices"]
+    job_state = rec.tic_tac_toe_job_state(index)
+    pending = job_state == "encoding"
+    payload["current"] = {
+        **row,
+        "instruction": task["prompt"],
+        "task_set": tic_tac_toe.TASK_SET,
+        "task_slug": task["slug"],
+        "completed": completed,
+        "encoding": pending,
+        "status": "completed" if completed else job_state or "pending",
+    }
+    return payload
+
+
+@app.post("/api/tic-tac-toe/current")
+def tic_tac_toe_set_current(req: TicTacToeCurrentReq):
+    try:
+        row = tic_tac_toe.instance(req.selection_index)
+        task = tic_tac_toe.resolve_task(row, library.load_tasks(tic_tac_toe.TASK_SET))
+    except (IndexError, ValueError, FileNotFoundError) as e:
+        raise HTTPException(400, str(e)) from e
+    previous = scene_view.read_current()
+    previous_index = previous.get("selection_index") if previous else None
+    if rec.state != "idle" and previous_index != req.selection_index:
+        raise HTTPException(400, "录制或暂停期间不能切换棋局")
+    if (
+        previous_index is not None
+        and previous_index != req.selection_index
+        and rec.tic_tac_toe_pending(int(previous_index))
+    ):
+        raise HTTPException(400, "当前棋局正在后台编码,完成后才能切换")
+    scene_view.write_current(
+        tic_tac_toe.TASK_SET,
+        task["slug"],
+        task["prompt"],
+        selection_index=row["selection_index"],
+    )
+    return _tic_tac_toe_payload()
+
+
+@app.get("/api/tic-tac-toe/current")
+def tic_tac_toe_get_current():
+    return _tic_tac_toe_payload()
+
+
 @app.get("/api/display/scene")
 def display_scene():
     """展示页轮询:当前任务 + 资产配置。优先按 instruction 精确匹配 scenes.json
@@ -440,6 +527,11 @@ def index():
 @app.get("/scene")
 def scene_page():
     return FileResponse(STATIC / "scene.html")
+
+
+@app.get("/tic-tac-toe")
+def tic_tac_toe_page():
+    return FileResponse(STATIC / "tic_tac_toe.html")
 
 
 @app.get("/assets/{name}")

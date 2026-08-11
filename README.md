@@ -89,7 +89,7 @@ uv run python -m collect_studio
 
 ### 局域网访问（可选）
 
-默认只监听本机 `127.0.0.1`。如需让另一台电脑打开页面（例如只读的「场景展示页」 `/scene`），可用环境变量放开监听：
+默认只监听本机 `127.0.0.1`。如需让另一台电脑打开页面（例如只读的「场景展示页」 `/scene` 或「井字棋采集展示」 `/tic-tac-toe`），可用环境变量放开监听：
 
 ```bash
 SO101_HOST=0.0.0.0 uv run python -m collect_studio
@@ -138,6 +138,16 @@ SO101_HOST=0.0.0.0 uv run python -m collect_studio
 
 保存后，视频会在后台编码为 MP4，可以直接开始下一集录制。
 
+#### 井字棋 300 条实例采集
+
+当 `~/so101_data/tasks_tic_tac_toe.jsonl` 只包含 `black_cube`、`white_cube` 两条语言任务时，在采集台选择 `tic_tac_toe` 集合会自动启用专用棋局导航。界面按仓库内冻结的 `production_300` 清单显示 `#001–#300`，并依据当前实例的执棋方自动选择黑方或白方任务；不要把这 300 个实例导入为语言任务。
+
+- 用“上一个 / 下一个 / 下一未完成”或编号输入框切换实例；该模式下 `T` 表示下一未完成实例。
+- 录制、暂停和当前实例编码期间不能切换。编码并入库成功后自动进入原始顺序中的下一未完成实例；舍弃或编码失败时停留在当前实例。
+- 完成度按 `selection_index` 统计。同一实例已有有效 episode 或正在编码时不能再次录制；需要重采时先将原 episode 标废。
+- 第二台电脑打开 `http://<采集机局域网 IP>:8600/tic-tac-toe`，即可每秒跟随采集端显示棋局、唯一最优目标格和原始语言指令。该页面没有切换或控制入口。
+- 井字棋导出仍只有两条语言任务，同时额外生成 `meta/tic_tac_toe_collection.jsonl`，记录导出 `episode_index` 到实例身份的映射。
+
 ### ④ 数据管理与导出
 
 导出页是一个面向全部数据（含回收站）的文件管理器：左栏按「任务 → 批次」浏览，中栏列出对应 episode，可逐行预览三路视频、修改提示词（可选同时归入另一个已有任务，会自动移动目录）、标废/恢复、彻底删除（仅回收站）。
@@ -151,6 +161,7 @@ SO101_HOST=0.0.0.0 uv run python -m collect_studio
 - `observation.eef_state` 和 `eef_action` 绝对末端位姿
 - GR00T `meta/modality.json`
 - `meta/validation_report.json` 校验报告
+- 井字棋数据可选的 `meta/tic_tac_toe_collection.jsonl` 实例映射
 
 ## 场景与任务制定
 

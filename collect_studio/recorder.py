@@ -315,7 +315,7 @@ class RecordService:
 
     def _meta_dict(self):
         rec = config_store.load()["record"]
-        return {
+        meta = {
             "id": self.ep_id,
             "session": self.session,
             "task_slug": self.cur_task["slug"],
@@ -330,6 +330,9 @@ class RecordService:
             "cameras": ROLES,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+        if self.cur_task.get("tic_tac_toe"):
+            meta["tic_tac_toe"] = dict(self.cur_task["tic_tac_toe"])
+        return meta
 
     def save(self) -> dict:
         with self._lock:
@@ -343,7 +346,14 @@ class RecordService:
             (ep_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
             self.ep_dir, self.ep_id, self.rows, self.data_f = None, None, [], None
             self.rec_elapsed = 0.0
-        job = {"id": ep_id, "state": "encoding"}
+        job = {
+            "id": ep_id,
+            "state": "encoding",
+            "task_set": meta.get("task_set"),
+            "task_slug": meta.get("task_slug"),
+        }
+        if meta.get("tic_tac_toe"):
+            job["tic_tac_toe"] = dict(meta["tic_tac_toe"])
         self.encode_q.append(job)
         threading.Thread(target=self._finalize, args=(ep_dir, meta, job), daemon=True).start()
         return meta
@@ -412,6 +422,15 @@ class RecordService:
             shutil.rmtree(ep_dir, ignore_errors=True)
 
     # ---------- 状态 ----------
+    def tic_tac_toe_job_state(self, selection_index: int) -> str | None:
+        for job in reversed(self.encode_q):
+            if job.get("tic_tac_toe", {}).get("selection_index") == selection_index:
+                return job.get("state")
+        return None
+
+    def tic_tac_toe_pending(self, selection_index: int) -> bool:
+        return self.tic_tac_toe_job_state(selection_index) == "encoding"
+
     def status(self) -> dict:
         with self._lock:
             gripper = {
