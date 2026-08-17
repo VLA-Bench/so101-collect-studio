@@ -140,13 +140,13 @@ SO101_HOST=0.0.0.0 uv run python -m collect_studio
 
 #### 井字棋 300 条实例采集
 
-当 `~/so101_data/tasks_tic_tac_toe.jsonl` 只包含 `black_cube`、`white_cube` 两条语言任务时，在采集台选择 `tic_tac_toe` 集合会自动启用专用棋局导航。界面按仓库内冻结的 `production_300` 清单显示 `#001–#300`，并依据当前实例的执棋方自动选择黑方或白方任务；不要把这 300 个实例导入为语言任务。
+当 `~/so101_data/tasks_tic_tac_toe.jsonl` 包含黑白棋子各九个物理目标格的 18 条任务时，在采集台选择 `tic_tac_toe` 集合会自动启用专用棋局导航。界面按仓库内冻结的 `production_300` 清单显示 `#001–#300`，并依据当前实例的执棋方与唯一目标格选择对应提示词，例如 `Place the black cube in the far left cell.`；行方向以棋盘物理位置定义为 `far` / `middle` / `near`，不依赖相机画面的上下方向。不要把这 300 个实例导入为语言任务。
 
 - 用“上一个 / 下一个 / 下一未完成”或编号输入框切换实例；该模式下 `T` 表示下一未完成实例。
 - 录制、暂停和当前实例编码期间不能切换。编码并入库成功后自动进入原始顺序中的下一未完成实例；舍弃或编码失败时停留在当前实例。
 - 完成度按 `selection_index` 统计。同一实例已有有效 episode 或正在编码时不能再次录制；需要重采时先将原 episode 标废。
 - 第二台电脑打开 `http://<采集机局域网 IP>:8600/tic-tac-toe`，即可每秒跟随采集端显示棋局、唯一最优目标格和原始语言指令。该页面没有切换或控制入口。
-- 井字棋导出仍只有两条语言任务，同时额外生成 `meta/tic_tac_toe_collection.jsonl`，记录导出 `episode_index` 到实例身份的映射。
+- 井字棋导出按实际“颜色 × 目标格”提示词生成任务（完整采集最多 18 条），同时额外生成 `meta/tic_tac_toe_collection.jsonl`，记录导出 `episode_index` 到实例身份的映射。
 
 ### ④ 数据管理与导出
 

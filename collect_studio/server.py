@@ -243,7 +243,10 @@ def rec_start(req: RecStartReq):
             raise HTTPException(400, "当前棋局已有有效 episode,重采前请先标废")
         if rec.tic_tac_toe_pending(row["selection_index"]):
             raise HTTPException(400, "当前棋局正在后台编码,请等待完成")
-        task = {**task, "tic_tac_toe": tic_tac_toe.episode_metadata(row)}
+        task = {
+            **task,
+            "tic_tac_toe": tic_tac_toe.episode_metadata(row),
+        }
     try:
         rec.rec_start(task)
         return rec.status()

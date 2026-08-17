@@ -11,7 +11,7 @@ SELECTION = "production_300"
 SNAPSHOT_SCHEMA = "tic_tac_toe_split_v1"
 MANIFEST_VERSION = "v1_seed42"
 SOURCE_MANIFEST_SHA256 = "a493f8acd754af0d7efd8c76727033a6d94981abab811f596ee1ca1dc4caa8ed"
-TASK_SLUGS = {"black": "black_cube", "white": "white_cube"}
+LEGACY_TASK_SLUGS = {"black": "black_cube", "white": "white_cube"}
 CELL_NAMES = (
     "far_left", "far_center", "far_right",
     "middle_left", "center", "middle_right",
@@ -21,6 +21,11 @@ CELL_LABELS = (
     "远左", "远中", "远右",
     "中左", "中心", "中右",
     "近左", "近中", "近右",
+)
+CELL_PROMPT_NAMES = (
+    "far left", "far center", "far right",
+    "middle left", "center", "middle right",
+    "near left", "near center", "near right",
 )
 TACTIC_LABELS = {"win_now": "立即获胜", "block": "阻挡威胁", "strategic": "策略落子"}
 _STATE_RE = re.compile(r"^(black|white)_n(\d)_([bew]{9})$")
@@ -72,7 +77,7 @@ def load_instances() -> tuple[dict, ...]:
             "display_number": index + 1,
             "board_code": board_code,
             "board": board,
-            "task_slug": TASK_SLUGS[side],
+            "task_slug": task_slug(side, optimal_cell),
             "optimal_cell_name": CELL_NAMES[optimal_cell],
             "optimal_cell_label": CELL_LABELS[optimal_cell],
             "tactic_label": TACTIC_LABELS.get(row.get("tactic"), str(row.get("tactic", ""))),
@@ -90,8 +95,13 @@ def instance(selection_index: int) -> dict:
     return instances[selection_index]
 
 
+def task_slug(side: str, cell: int) -> str:
+    """返回颜色与物理目标格唯一对应的任务 slug。"""
+    return f"{side}_cube_{CELL_NAMES[cell]}"
+
+
 def resolve_task(row: dict, tasks: list[dict]) -> dict:
-    """按当前执棋方在两条真实语言任务中解析对应任务。"""
+    """按当前执棋方与目标格解析对应的真实语言任务。"""
     slug = row["task_slug"]
     task = next((item for item in tasks if item.get("slug") == slug), None)
     if task is None:
@@ -127,11 +137,12 @@ def progress(episodes: list[dict]) -> dict:
             row = instances[index]
         except (KeyError, TypeError, ValueError, IndexError):
             continue
+        valid_task_slugs = {row["task_slug"], LEGACY_TASK_SLUGS[row["side_to_move"]]}
         if (
             meta.get("manifest_sha256") != SOURCE_MANIFEST_SHA256
             or meta.get("selection") != SELECTION
             or meta.get("state_id") != row["state_id"]
-            or episode.get("task_slug") != row["task_slug"]
+            or episode.get("task_slug") not in valid_task_slugs
             or meta.get("side_to_move") != row["side_to_move"]
             or meta.get("layout_seed") != row["layout_seed"]
             or meta.get("tactic") != row["tactic"]
@@ -143,7 +154,7 @@ def progress(episodes: list[dict]) -> dict:
     duplicates = sorted(index for index, count in counts.items() if count > 1)
     completed_by_side = {
         side: sum(instances[index]["side_to_move"] == side for index in completed)
-        for side in TASK_SLUGS
+        for side in LEGACY_TASK_SLUGS
     }
     return {
         "total": len(instances),
