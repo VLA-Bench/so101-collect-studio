@@ -42,8 +42,8 @@ record:
   auto_exposure: false
 gripper_protection:
   enabled: true
-  current_limit_ma: 300.0
-  stall_window_ms: 300
+  current_limit_ma: 400.0
+  stall_window_ms: 1000.0
   max_position_change: 0.5
   min_closing_error: 2.0
   release_margin: 2.0

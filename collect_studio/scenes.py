@@ -148,32 +148,41 @@ def _is_color_mismatch(scene: dict, targets: dict) -> bool:  # T3:每个放置�
     return len(placed) >= 1 and all(blk_color[bid] != box_color[tid] for bid, tid in placed.items())
 
 
-def _is_by_shape(scene: dict, targets: dict) -> bool:  # T4:同形状→同盒,且≥2 形状进≥2 盒
-    blk_shape = {b["id"]: b["shape"] for b in scene["blocks"]}
+def _pure_groups(scene: dict, targets: dict, attr: str) -> list[set[str]]:
+    """返回属性值完整进入同一盒、且目标盒不混入其他属性值的物块组。"""
+    attrs = {b["id"]: b[attr] for b in scene["blocks"]}
     placed = _placed(targets)
-    by_shape: dict[str, set[str]] = {}
-    for bid, tid in placed.items():
-        by_shape.setdefault(blk_shape[bid], set()).add(tid)
-    if not by_shape or any(len(boxes) > 1 for boxes in by_shape.values()):
+    by_attr: dict[str, list[str]] = {}
+    for bid, value in attrs.items():
+        by_attr.setdefault(value, []).append(bid)
+    groups: list[set[str]] = []
+    for value, ids in by_attr.items():
+        destinations = {targets[bid] for bid in ids}
+        if len(destinations) != 1 or None in destinations:
+            continue
+        target = next(iter(destinations))
+        if all(attrs[bid] == value for bid, tid in placed.items() if tid == target):
+            groups.append(set(ids))
+    return groups
+
+
+def _is_by_shape(scene: dict, targets: dict) -> bool:  # T4:同形状物块整体入同一纯形状盒
+    placed = _placed(targets)
+    shape_groups = _pure_groups(scene, targets, "shape")
+    if not shape_groups:
         return False
-    boxes_used = {next(iter(boxes)) for boxes in by_shape.values()}
-    return len(by_shape) >= 2 and len(boxes_used) >= 2
+    covered = set().union(*shape_groups)
+    return set(placed) <= covered and any(len(group) >= 2 for group in shape_groups)
 
 
-def _is_by_shape_color(scene: dict, targets: dict) -> bool:  # T5:形状与颜色两轴都参与判别
-    blk = {b["id"]: b for b in scene["blocks"]}
+def _is_by_shape_color(scene: dict, targets: dict) -> bool:  # T5:形状组与颜色组共同覆盖已放入物块
     placed = _placed(targets)
-    ids = list(placed)
-    pairs = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1:]]
-    shape_disc = any(
-        blk[a]["shape"] == blk[b]["shape"] and blk[a]["color"] != blk[b]["color"] and placed[a] != placed[b]
-        for a, b in pairs
-    )
-    color_disc = any(
-        blk[a]["color"] == blk[b]["color"] and blk[a]["shape"] != blk[b]["shape"] and placed[a] != placed[b]
-        for a, b in pairs
-    )
-    return shape_disc and color_disc
+    shape_groups = _pure_groups(scene, targets, "shape")
+    color_groups = _pure_groups(scene, targets, "color")
+    if not shape_groups or not color_groups:
+        return False
+    covered = set().union(*shape_groups, *color_groups)
+    return set(placed) <= covered and any(len(group) >= 2 for group in (*shape_groups, *color_groups))
 
 
 SUBTASK_PREDICATES: dict[str, Callable[[dict, dict], bool]] = {
@@ -187,7 +196,10 @@ SUBTASK_PREDICATES: dict[str, Callable[[dict, dict], bool]] = {
 
 def classify_targets(scene: dict, targets: dict[str, str | None]) -> list[str]:
     """返回该 targets 命中的全部子任务(空列表 = 未归类 / 基础放置)。scene 需为展开形式。"""
-    return [sid for sid, pred in SUBTASK_PREDICATES.items() if pred(scene, targets)]
+    subtasks = [sid for sid, pred in SUBTASK_PREDICATES.items() if pred(scene, targets)]
+    if "T5" in subtasks and "T4" in subtasks:
+        subtasks.remove("T4")  # T5 为形状+颜色组合任务,与纯形状 T4 互斥
+    return subtasks
 
 
 # --------------------------------------------------------------------------------------

@@ -40,6 +40,67 @@ class MigrationRoundtripTest(unittest.TestCase):
         self.assertEqual(n, 5)  # desk01 迁移数据共 5 个任务
 
 
+class SubtaskClassificationTest(unittest.TestCase):
+    def test_t4_matches_d4_cube_selection(self):
+        scene = scenes.expand_scene({
+            "id": "D4",
+            "boxes": ["large_blue"],
+            "blocks": ["cube_yellow", "cube_blue", "l_block_red"],
+            "tasks": [],
+        })
+        targets = {
+            "cube_yellow": "large_blue",
+            "cube_blue": "large_blue",
+            "l_block_red": None,
+        }
+        self.assertIn("T4", scenes.classify_targets(scene, targets))
+
+    def test_t4_rejects_box_mixing_shapes(self):
+        scene = scenes.expand_scene({
+            "id": "D4",
+            "boxes": ["large_blue"],
+            "blocks": ["cube_yellow", "cube_blue", "l_block_red"],
+            "tasks": [],
+        })
+        targets = {
+            "cube_yellow": "large_blue",
+            "cube_blue": "large_blue",
+            "l_block_red": "large_blue",
+        }
+        self.assertNotIn("T4", scenes.classify_targets(scene, targets))
+
+    def test_current_d4_is_t5_not_t4(self):
+        scene = scenes.expand_scene({
+            "id": "D4",
+            "boxes": ["medium_red", "small_yellow"],
+            "blocks": ["cuboid_blue", "l_block_blue", "cube_red", "cube_yellow"],
+            "tasks": [],
+        })
+        targets = {
+            "cuboid_blue": "medium_red",
+            "l_block_blue": "medium_red",
+            "cube_red": "small_yellow",
+            "cube_yellow": "small_yellow",
+        }
+        subtasks = scenes.classify_targets(scene, targets)
+        self.assertIn("T5", subtasks)
+        self.assertNotIn("T4", subtasks)
+
+    def test_t5_rejects_placement_not_covered_by_both_axes(self):
+        scene = scenes.expand_scene({
+            "id": "D5",
+            "boxes": ["large_blue", "small_red"],
+            "blocks": ["cube_yellow", "cube_blue", "l_block_red"],
+            "tasks": [],
+        })
+        targets = {
+            "cube_yellow": "large_blue",
+            "cube_blue": "large_blue",
+            "l_block_red": None,
+        }
+        self.assertNotIn("T5", scenes.classify_targets(scene, targets))
+
+
 class ValidateSceneTest(unittest.TestCase):
     def _expand(self, **kw):
         raw = {"id": "T", "boxes": ["large_red"], "blocks": ["cube_red"], "tasks": []}
