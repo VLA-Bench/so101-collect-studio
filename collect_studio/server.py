@@ -137,6 +137,39 @@ def cams_unbind(req: UnbindReq):
     return cams.unbind(req.role)
 
 
+class AutoExposureReq(BaseModel):
+    auto_exposure: bool
+
+
+@app.put("/api/cams/auto-exposure")
+def cams_auto_exposure(req: AutoExposureReq):
+    return cams.set_auto_exposure(req.auto_exposure)
+
+
+class CamControlsReq(BaseModel):
+    auto_exposure: bool | None = None
+    absolute_exposure_time: int | None = None
+    brightness: int | None = None
+    contrast: int | None = None
+    saturation: int | None = None
+    gain: int | None = None
+    auto_white_balance: bool | None = None
+    white_balance_temperature: int | None = None
+
+
+@app.get("/api/cams/controls/{uid}")
+def cams_get_controls(uid: str):
+    return cams.get_uvc_controls(uid)
+
+
+@app.put("/api/cams/controls/{uid}")
+def cams_set_controls(uid: str, req: CamControlsReq):
+    values = req.model_dump(exclude_none=True)
+    if not values:
+        raise HTTPException(400, "没有可设置的参数")
+    return cams.set_uvc_controls(uid, values)
+
+
 def _frame_response(stream):
     buf = stream.latest_jpeg() if stream else None
     if not buf:

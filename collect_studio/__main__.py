@@ -24,11 +24,13 @@ if __name__ == "__main__":
     print(f"SO101 Collect Studio 已启动:")
     print(f"  采集台:   http://127.0.0.1:{PORT}/")
     print(f"  场景展示: http://127.0.0.1:{PORT}/scene")
+    print(f"  井字棋: http://127.0.0.1:{PORT}/tic-tac-toe")
     if host == "0.0.0.0":
         ip = _lan_ip()
         if ip:
             print(f"  局域网访问(另一台电脑打开):")
             print(f"    采集台:   http://{ip}:{PORT}/")
             print(f"    场景展示: http://{ip}:{PORT}/scene")
+            print(f"    井字棋: http://{ip}:{PORT}/tic-tac-toe")
         print("  ⚠ 当前无认证,局域网内任何人都能控制机械臂/相机,请确认网络可信。")
     uvicorn.run(app, host=host, port=PORT, log_level="warning")

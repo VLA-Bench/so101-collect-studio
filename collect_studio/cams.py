@@ -11,6 +11,7 @@ import time
 import cv2
 
 from . import config_store
+from . import uvc_controls
 
 log = logging.getLogger("cams")
 
@@ -119,7 +120,15 @@ class CamManager:
             del self.streams[uid]
             s = None
         if s is None:
-            self.streams[uid] = CamStream(uid, rec["width"], rec["height"], rec["fps"])
+            saved = (config_store.load().get("camera_controls") or {}).get(uid) or {}
+            if "auto_exposure" in saved:
+                ae = bool(saved["auto_exposure"])
+            else:
+                ae = bool(rec.get("auto_exposure", False))
+            self.streams[uid] = CamStream(
+                uid, rec["width"], rec["height"], rec["fps"],
+                auto_exposure=ae,
+            )
 
     def start_all(self, include_builtin: bool = False):
         """打开枚举到的相机供绑定页预览。
@@ -207,7 +216,61 @@ class CamManager:
             d["streaming"] = bool(s and s.ok)
             d["stream_err"] = s.err if s else None
         missing = [r for r, uid in cfg.items() if uid and uid not in {x["unique_id"] for x in devs}]
-        return {"devices": devs, "binding": cfg, "missing": missing, "bound_health": self.bound_health()}
+        exposure = {}
+        with self.lock:
+            for uid, s in self.streams.items():
+                fn = getattr(s, "exposure_status", None)
+                if fn:
+                    exposure[uid] = fn()
+        return {
+            "devices": devs,
+            "binding": cfg,
+            "missing": missing,
+            "bound_health": self.bound_health(),
+            "auto_exposure": bool(config_store.load()["record"].get("auto_exposure", False)),
+            "exposure": exposure,
+        }
+
+    def set_auto_exposure(self, enabled: bool) -> dict:
+        """兼容旧接口:三路一起切自动曝光。新 UI 走 set_uvc_controls 单路设置。"""
+        enabled = bool(enabled)
+        rec = dict(config_store.load()["record"])
+        rec["auto_exposure"] = enabled
+        config_store.update("record", rec)
+        with self.lock:
+            uids = list(self.streams)
+        for uid in uids:
+            self.set_uvc_controls(uid, {"auto_exposure": enabled})
+        return self.status()
+
+    def saved_controls(self, uid: str) -> dict:
+        return dict((config_store.load().get("camera_controls") or {}).get(uid) or {})
+
+    def get_uvc_controls(self, uid: str) -> dict:
+        snap = uvc_controls.read_controls(uid)
+        snap["saved"] = self.saved_controls(uid)
+        return snap
+
+    def set_uvc_controls(self, uid: str, values: dict) -> dict:
+        """只改这一台:先写 UVC,再同步该路 AVFoundation 曝光,最后按 uniqueID 落盘。"""
+        patch = uvc_controls.normalize_patch(values)
+        if not patch:
+            return self.get_uvc_controls(uid)
+        if "auto_exposure" in patch:
+            with self.lock:
+                stream = self.streams.get(uid)
+            if stream is not None:
+                fn = getattr(stream, "set_auto_exposure", None)
+                if fn:
+                    fn(patch["auto_exposure"])
+        snap = uvc_controls.set_controls(uid, patch)
+        if snap.get("ok"):
+            saved = self.saved_controls(uid)
+            saved.update(uvc_controls.snapshot_to_saved(snap))
+            saved.update(patch)
+            config_store.update("camera_controls", {uid: saved})
+        snap["saved"] = self.saved_controls(uid)
+        return snap
 
     def stop_all(self):
         with self.lock:

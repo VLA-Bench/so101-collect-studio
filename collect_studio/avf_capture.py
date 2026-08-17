@@ -36,6 +36,37 @@ _START_ATTEMPTS = 3    # 收不到帧时整路重建的最多次数
 _RETRY_BACKOFF_S = 0.5
 
 
+def apply_auto_exposure(unique_id: str, enabled: bool, *, device=None) -> dict:
+    """按 uniqueID 开关连续自动曝光。返回 {ok, mode, err}。
+
+    三路外置 UVC 实测(2026-08):支持 Locked / Continuous,不支持 AutoExpose /
+    Custom / ISO / exposureTargetBias。必须在 session.startRunning 之后设置;
+    启动前读到的 Locked(0) 只是占位,不代表硬件已锁。
+    """
+    target = (
+        AVF.AVCaptureExposureModeContinuousAutoExposure
+        if enabled
+        else AVF.AVCaptureExposureModeLocked
+    )
+    mode_name = "continuous" if enabled else "locked"
+    dev = device if device is not None else AVF.AVCaptureDevice.deviceWithUniqueID_(unique_id)
+    if dev is None:
+        return {"ok": False, "mode": None, "err": "设备不存在(可能已拔出)"}
+    try:
+        if not dev.isExposureModeSupported_(target):
+            return {"ok": False, "mode": None, "err": f"设备不支持{mode_name}曝光模式"}
+        ok, err = dev.lockForConfiguration_(None)
+        if not ok:
+            return {"ok": False, "mode": None, "err": f"无法锁定设备配置:{err}"}
+        try:
+            dev.setExposureMode_(target)
+        finally:
+            dev.unlockForConfiguration()
+        return {"ok": True, "mode": mode_name, "err": None}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "mode": None, "err": str(e)}
+
+
 def _pick_format_and_fps_range(dev, width, height, fps):
     """在设备格式列表里找精确匹配 width×height 且支持 fps 的 (format, frameRateRange)。
 
@@ -88,9 +119,11 @@ class _SampleSink(NSObject):
 class AVFCamStream:
     """按 uniqueID 采集;接口与旧 CamStream 兼容(latest / latest_jpeg / ok / err / stop)。"""
 
-    def __init__(self, unique_id: str, width: int, height: int, fps: int):
+    def __init__(self, unique_id: str, width: int, height: int, fps: int,
+                 auto_exposure: bool = False):
         self.unique_id = unique_id
         self.width, self.height, self.fps = width, height, fps
+        self.auto_exposure = bool(auto_exposure)
         self.frame = None
         self.frame_ts = 0.0
         self.frame_count = 0
@@ -98,6 +131,8 @@ class AVFCamStream:
         self.err: str | None = None
         self._lock = threading.Lock()
         self._lifecycle_lock = threading.Lock()
+        self._exposure_lock = threading.Lock()
+        self._exposure: dict = {"ok": None, "mode": None, "err": None}
         self._session = None
         self._sink = None
         self._queue = None
@@ -201,6 +236,47 @@ class AVFCamStream:
                 session.stopRunning()
             else:
                 self._session = session
+        if not self._stopped:
+            result = self._apply_exposure()
+            if not result.get("ok"):
+                log.warning("camera %s 设置曝光失败:%s", self.unique_id, result.get("err"))
+            self._apply_uvc()
+
+    def _apply_exposure(self) -> dict:
+        with self._exposure_lock:
+            result = apply_auto_exposure(self.unique_id, self.auto_exposure)
+            self._exposure = result
+            return result
+
+    def _apply_uvc(self, saved: dict | None = None) -> dict:
+        """开流后下发该 uniqueID 自己的 UVC 参数,不影响另外两路。"""
+        from . import config_store
+        from . import uvc_controls
+
+        if saved is None:
+            saved = (config_store.load().get("camera_controls") or {}).get(self.unique_id) or {}
+        result = uvc_controls.apply_saved(
+            self.unique_id, saved, auto_exposure=self.auto_exposure,
+        )
+        if not result.get("ok"):
+            log.warning("camera %s 下发 UVC 参数失败:%s", self.unique_id, result.get("err"))
+        return result
+
+    def set_auto_exposure(self, enabled: bool) -> dict:
+        """热切换自动曝光;流尚未跑起来时只记下意向,等 _start 后再应用。"""
+        self.auto_exposure = bool(enabled)
+        with self._lifecycle_lock:
+            ready = (not self._stopped) and self._session is not None
+        if not ready:
+            self._exposure = {"ok": True, "mode": None, "err": None}
+            return dict(self._exposure)
+        return self._apply_exposure()
+
+    def exposure_status(self) -> dict:
+        return {
+            "auto_exposure": self.auto_exposure,
+            **self._exposure,
+        }
 
     def _on_frame(self, frame):
         if self._stopped:

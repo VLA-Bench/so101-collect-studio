@@ -77,6 +77,8 @@
   .protect-toggle{align-self:center;color:var(--txt)!important;font-size:13px!important;display:flex;align-items:center;gap:8px}
   .protect-toggle input{accent-color:var(--accent)}
 
+  .cam-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;max-width:1360px;margin:-6px 0 14px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .cam-toolbar #ae-hint{font-size:12px;color:var(--dim);line-height:1.45}
   .cams{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1360px}
   .cam-card img{width:100%;aspect-ratio:4/3;border-radius:8px;background:#000;display:block;object-fit:cover}
   .cam-dormant{width:100%;aspect-ratio:4/3;border-radius:8px;background:#0d1220;border:1px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
@@ -87,6 +89,15 @@
   .roles{display:flex;gap:8px}
   .roles button{flex:1;padding:6px 4px;font-size:13px}
   .roles button.sel{background:var(--accent);border-color:var(--accent);color:#04121d;font-weight:600}
+  .cam-ctrls{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:7px}
+  .cam-ctrls .ctrl-row{display:grid;grid-template-columns:64px 1fr 58px;gap:8px;align-items:center;font-size:12px;color:var(--dim)}
+  .cam-ctrls .ctrl-row.check{grid-template-columns:auto 1fr;color:var(--txt)}
+  .cam-ctrls .ctrl-row.check input{accent-color:var(--accent)}
+  .cam-ctrls input[type=range]{width:100%;accent-color:var(--accent)}
+  .cam-ctrls .ctrl-val{font-family:var(--mono);font-size:11px;text-align:right;color:var(--txt)}
+  .cam-ctrls .ctrl-err,.cam-ctrls .ctrl-wait{font-size:12px;color:var(--dim)}
+  .cam-ctrls .ctrl-err{color:var(--amber)}
+  .cam-ctrls input:disabled{opacity:.35}
   .next-bar{max-width:1360px;margin-top:18px;display:flex;justify-content:space-between;align-items:center}
 
   aside{width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
@@ -346,6 +357,9 @@
   <div class="step" id="step2">
     <h2>相机绑定 <button id="cam-refresh" style="font-size:12px;padding:4px 12px;margin-left:10px">↻ 重新识别相机</button></h2>
     <div class="sub">序号(index)每次启动可能漂移,<b>不用管它</b> —— 绑定跟随硬件 uniqueID,持久保存。<b>对着画面点角色按钮</b>改绑一次即可(角色互斥,自动让位),<b>✕</b> 可解绑;<b>内置相机默认不调用</b>(不占用、不亮指示灯),仅当识别有误需要用它时,点卡片上的「▶ 启动预览」看画面后再绑定。分辨率统一 640×480@30。拔插相机后点「重新识别」。</div>
+    <div class="cam-toolbar">
+      <span id="ae-hint">三路各自调节曝光、亮度、白平衡,互不影响。改动立即生效并按相机记住;内置相机没有这些控件。</span>
+    </div>
     <div class="cams" id="cams"></div>
     <div class="next-bar">
       <span id="cam-status" style="color:var(--dim);font-size:13px"></span>
@@ -576,6 +590,7 @@ function closeModals(){ document.querySelectorAll('.modal-bg').forEach(m=>m.clas
 const S = {
   step: 1,
   status: null,          // /api/status
+  camControls: {},       // uniqueID -> UVC 快照(三路独立)
   eps: [],               // /api/episodes
   page: 'live',          // 'live' | 数字索引
   curTask: localStorage.getItem('curTask') || null,
@@ -769,6 +784,7 @@ function renderStatus(){
   const cams=st.cams, nExt=(cams.devices||[]).filter(d=>!d.builtin).length;
   const bound=Object.values(cams.binding||{}).filter(Boolean).length;
   $('d-cams').className='dot'+(bound===3&&!cams.missing.length?' ok':(nExt?' warn':''));
+  syncAutoExposureToggle(cams);
   // teleop badge + rec
   const rec=st.rec;
   $('d-teleop').className='dot'+(rec.teleop_on?' ok':'');
@@ -878,6 +894,132 @@ $('estop').onclick=()=>estop();
 function estop(){ post('/api/arms/estop').then(()=>toast('⏻ 急停:遥操作已停,从动臂断力矩','r')).catch(e=>toast(e.message,'r')); }
 
 /* ================= step2 相机 ================= */
+function updateExposureChips(cams){
+  document.querySelectorAll('#cams .cam-card').forEach(card=>{
+    const uid=card.dataset.uid;
+    if(!uid) return;
+    const snap=(S.camControls||{})[uid];
+    const ae=snap?.controls?.auto_exposure_mode;
+    const exp=(cams.exposure||{})[uid];
+    const nm=card.querySelector('.nm');
+    let chip=nm?.querySelector('[data-exp-chip]');
+    let auto=null;
+    if(ae && ae.supported && typeof ae.auto==='boolean') auto=ae.auto;
+    else if(exp && (exp.mode==='continuous' || exp.mode==='locked')) auto=exp.mode==='continuous';
+    if(auto===null){
+      if(chip) chip.remove();
+      return;
+    }
+    if(!chip && nm){
+      chip=document.createElement('span');
+      chip.setAttribute('data-exp-chip','');
+      nm.appendChild(chip);
+    }
+    if(!chip) return;
+    chip.className=auto?'chip warn':'chip';
+    chip.textContent=auto?'自动曝光':'曝光锁定';
+  });
+}
+function syncAutoExposureToggle(cams){
+  updateExposureChips(cams);
+}
+const CAM_CTRL_ROWS=[
+  {key:'auto_exposure', kind:'check', label:'自动曝光'},
+  {key:'absolute_exposure_time', kind:'range', label:'曝光', fmt:v=>(v*0.1).toFixed(1)+' ms'},
+  {key:'brightness', kind:'range', label:'亮度'},
+  {key:'contrast', kind:'range', label:'对比度'},
+  {key:'saturation', kind:'range', label:'饱和度'},
+  {key:'gain', kind:'range', label:'增益'},
+  {key:'auto_white_balance', kind:'check', label:'自动白平衡'},
+  {key:'white_balance_temperature', kind:'range', label:'色温', fmt:v=>v+' K'},
+];
+const CAM_CTRL_SOURCE={
+  auto_exposure:'auto_exposure_mode',
+  auto_white_balance:'auto_white_balance_temperature',
+};
+
+function camCtrlItem(snap, key){
+  const src=CAM_CTRL_SOURCE[key]||key;
+  return (snap?.controls||{})[src]||null;
+}
+function camCtrlSupported(item){
+  return !!(item && item.supported && item.value!=null);
+}
+function formatCamCtrl(row, value){
+  if(row.fmt) return row.fmt(value);
+  return String(value);
+}
+function paintCamCtrls(panel, snap){
+  if(!panel) return;
+  S.camControls[panel.dataset.uid]=snap;
+  if(!snap || snap.ok===false){
+    panel.innerHTML=`<div class="ctrl-err">${(snap&&snap.err)||'此相机不支持独立调节'}</div>`;
+    return;
+  }
+  const aeOn=!!camCtrlItem(snap,'auto_exposure')?.auto;
+  const awbOn=!!camCtrlItem(snap,'auto_white_balance')?.on;
+  const parts=[];
+  for(const row of CAM_CTRL_ROWS){
+    const item=camCtrlItem(snap,row.key);
+    if(!camCtrlSupported(item) && row.kind==='range') continue;
+    if(row.kind==='check' && !(item && item.supported)) continue;
+    if(row.kind==='check'){
+      const on=row.key==='auto_exposure'?aeOn:awbOn;
+      parts.push(`<label class="ctrl-row check"><input type="checkbox" data-ctrl="${row.key}" ${on?'checked':''}>${row.label}</label>`);
+      continue;
+    }
+    const min=item.min, max=item.max;
+    if(min==null || max==null || min===max) continue;
+    const step=item.res>0?item.res:1;
+    const disabled=(row.key==='absolute_exposure_time'&&aeOn)||(row.key==='white_balance_temperature'&&awbOn);
+    parts.push(`<label class="ctrl-row"><span>${row.label}</span><input type="range" data-ctrl="${row.key}" min="${min}" max="${max}" step="${step}" value="${item.value}" ${disabled?'disabled':''}><span class="ctrl-val">${formatCamCtrl(row,item.value)}</span></label>`);
+  }
+  panel.innerHTML=parts.length?parts.join(''):`<div class="ctrl-err">未读到可调参数</div>`;
+}
+async function loadCamCtrls(panel){
+  const uid=panel.dataset.uid;
+  panel.innerHTML='<div class="ctrl-wait">读取参数…</div>';
+  try{
+    const snap=await api('/api/cams/controls/'+encodeURIComponent(uid));
+    if(document.activeElement && panel.contains(document.activeElement)) return;
+    paintCamCtrls(panel, snap);
+    updateExposureChips(S.status?.cams||{});
+  }catch(e){
+    panel.innerHTML=`<div class="ctrl-err">${e.message}</div>`;
+  }
+}
+function updateCamCtrlLabel(input){
+  const row=CAM_CTRL_ROWS.find(r=>r.key===input.dataset.ctrl);
+  const val=input.closest('.ctrl-row')?.querySelector('.ctrl-val');
+  if(row && val) val.textContent=formatCamCtrl(row, Number(input.value));
+}
+async function commitCamCtrl(input){
+  const panel=input.closest('.cam-ctrls');
+  if(!panel) return;
+  const uid=panel.dataset.uid;
+  const key=input.dataset.ctrl;
+  const body={};
+  if(input.type==='checkbox') body[key]=input.checked;
+  else body[key]=Number(input.value);
+  if(key==='auto_exposure' && !input.checked){
+    const exp=panel.querySelector('[data-ctrl=absolute_exposure_time]');
+    if(exp) body.absolute_exposure_time=Number(exp.value);
+  }
+  if(key==='auto_white_balance' && !input.checked){
+    const wb=panel.querySelector('[data-ctrl=white_balance_temperature]');
+    if(wb) body.white_balance_temperature=Number(wb.value);
+  }
+  panel.querySelectorAll('input').forEach(el=>el.disabled=true);
+  try{
+    const snap=await api('/api/cams/controls/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify(body)});
+    paintCamCtrls(panel, snap);
+    updateExposureChips(S.status?.cams||{});
+    if(snap.ok===false) toast(snap.err||'设置未生效','a');
+  }catch(e){
+    toast(e.message,'r');
+    loadCamCtrls(panel);
+  }
+}
 function renderCams(){
   const st=S.status; if(!st) return;
   stopPreviews();
@@ -885,6 +1027,7 @@ function renderCams(){
   const roleNames={wrist:'腕部 wrist',left_rear:'左后 left_rear',right_rear:'右后 right_rear'};
   for(const d of st.cams.devices){
     const card=document.createElement('div'); card.className='card cam-card';
+    card.dataset.uid=d.unique_id;
     // 所有相机都可绑定,内置只是提示;已绑定的卡片附带解绑按钮
     const roles = `<div class="roles">${Object.keys(roleNames).map(r=>
         `<button data-uid="${d.unique_id}" data-role="${r}" class="${d.role===r?'sel':''}">${roleNames[r]}</button>`).join('')}
@@ -894,15 +1037,29 @@ function renderCams(){
     const media = dormant
       ? `<div class="cam-dormant"><button data-start="${d.unique_id}">▶ 启动预览</button><span>内置相机默认不调用<br>识别存疑时点此查看画面再绑定</span></div>`
       : `<img data-preview-url="/frame/uid/${encodeURIComponent(d.unique_id)}.jpg" alt="${d.name} 实时画面">`;
+    const exp=(st.cams.exposure||{})[d.unique_id];
+    const expChip=exp&&exp.mode==='continuous'?' <span class="chip warn" data-exp-chip>自动曝光</span>'
+      :(exp&&exp.mode==='locked'?' <span class="chip" data-exp-chip>曝光锁定</span>':'');
+    const ctrls=d.builtin?'':`<div class="cam-ctrls" data-uid="${d.unique_id}"><div class="ctrl-wait">读取参数…</div></div>`;
     card.innerHTML=`${media}
-      <div class="nm">${d.name} <span class="chip">index ${d.index}</span>${d.builtin?' <span class="chip warn">内置</span>':''}${d.role?` <span class="chip saved">${d.role}</span>`:''}</div>
-      <div class="uid">uniqueID ${d.unique_id}</div>${roles}`;
+      <div class="nm">${d.name} <span class="chip">index ${d.index}</span>${d.builtin?' <span class="chip warn">内置</span>':''}${d.role?` <span class="chip saved">${d.role}</span>`:''}${expChip}</div>
+      <div class="uid">uniqueID ${d.unique_id}</div>${roles}${ctrls}`;
     wrap.appendChild(card);
   }
   startPreviews(wrap);
+  wrap.querySelectorAll('.cam-ctrls').forEach(loadCamCtrls);
   const bound=Object.values(st.cams.binding).filter(Boolean).length;
   $('cam-status').textContent=`已绑定 ${bound} / 3 个角色` + (st.cams.missing.length? ` · 缺失:${st.cams.missing.join(',')}`:'');
+  syncAutoExposureToggle(st.cams);
 }
+$('cams').addEventListener('input',e=>{
+  const range=e.target.closest('input[type=range][data-ctrl]');
+  if(range) updateCamCtrlLabel(range);
+});
+$('cams').addEventListener('change',e=>{
+  const input=e.target.closest('[data-ctrl]');
+  if(input) commitCamCtrl(input);
+});
 $('cams').addEventListener('click',async e=>{
   const s=e.target.closest('button[data-start]');
   if(s){

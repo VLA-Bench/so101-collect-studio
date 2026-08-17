@@ -16,7 +16,9 @@ DEFAULTS = {
     },
     # role -> AVFoundation uniqueID;首次启动时按枚举顺序自动填 0/1/2
     "cameras": {"wrist": None, "left_rear": None, "right_rear": None},
-    "record": {"fps": 30, "width": 640, "height": 480},
+    # uniqueID -> 该相机上次调过的 UVC 参数(三路互不影响;没调过的键不写)
+    "camera_controls": {},
+    "record": {"fps": 30, "width": 640, "height": 480, "auto_exposure": False},
     "gripper_protection": dict(DEFAULT_GRIPPER_PROTECTION),
 }
 

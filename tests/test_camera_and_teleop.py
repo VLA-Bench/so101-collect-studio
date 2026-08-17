@@ -19,8 +19,9 @@ DEVICES = [
 
 
 class FakeStream:
-    def __init__(self, unique_id, width, height, fps):
+    def __init__(self, unique_id, width, height, fps, auto_exposure=False):
         self.unique_id = unique_id
+        self.auto_exposure = auto_exposure
         self.ok = True
         self.err = None
         self.frame_count = 1
@@ -28,6 +29,18 @@ class FakeStream:
 
     def stop(self):
         self.stopped = True
+
+    def set_auto_exposure(self, enabled):
+        self.auto_exposure = bool(enabled)
+        return {"ok": True, "mode": "continuous" if enabled else "locked", "err": None}
+
+    def exposure_status(self):
+        return {
+            "auto_exposure": self.auto_exposure,
+            "ok": True,
+            "mode": "continuous" if self.auto_exposure else "locked",
+            "err": None,
+        }
 
 
 class CameraLifecycleTest(unittest.TestCase):
