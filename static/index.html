@@ -387,7 +387,7 @@
         <div style="font-size:11px;color:var(--dim);margin-top:6px">开启瞬间从动臂会跟随主动臂当前位姿,请先把主动臂摆到接近从动臂的姿态。</div>
       </section>
       <section>
-        <h3>任务(<kbd>T</kbd> 轮换)<a id="display-link" href="/scene" target="_blank" style="float:right;font-size:11px;font-weight:400">场景展示页 ⧉</a></h3>
+        <h3>任务(<kbd>R</kbd> 上一条 / <kbd>T</kbd> 下一条)<a id="display-link" href="/scene" target="_blank" style="float:right;font-size:11px;font-weight:400">场景展示页 ⧉</a></h3>
         <select id="taskset-sel" style="margin-bottom:6px"></select>
         <div id="tasklist"></div>
         <div class="addtask" id="task-add-row">
@@ -444,7 +444,7 @@
             <button id="savebtn" disabled>✓ 保存 <kbd style="margin-left:4px">Enter</kbd></button>
             <button id="dropbtn" class="danger" disabled>✗ 舍弃 <kbd style="margin-left:4px">⌫</kbd></button>
             <span class="spacer"></span>
-            <span class="hint"><span><kbd>←</kbd><kbd>→</kbd> 翻页</span><span><kbd>G</kbd> 跳转</span><span><kbd>T</kbd> 换任务</span><span><kbd>?</kbd> 帮助</span></span>
+            <span class="hint"><span><kbd>←</kbd><kbd>→</kbd> 翻页</span><span><kbd>G</kbd> 跳转</span><span><kbd>R</kbd><kbd>T</kbd> 换任务</span><span><kbd>?</kbd> 帮助</span></span>
           </div>
         </div>
       </div>
@@ -501,7 +501,8 @@
     <span class="k"><kbd>←</kbd> <kbd>→</kbd></span><span>上一页 / 下一页(录制中翻页会先自动暂停)</span>
     <span class="k"><kbd>Home</kbd> <kbd>End</kbd></span><span>第一集 / 回到 LIVE</span>
     <span class="k"><kbd>G</kbd></span><span>跳转到指定 episode</span>
-    <span class="k"><kbd>T</kbd></span><span>轮换任务(轮流采集)</span>
+    <span class="k"><kbd>R</kbd></span><span>上一条任务</span>
+    <span class="k"><kbd>T</kbd></span><span>下一条任务(井字棋为下一未完成实例)</span>
     <span class="k"><kbd>E</kbd></span><span>急停:停遥操作 + 从动臂断力矩</span>
     <span class="k"><kbd>?</kbd></span><span>本帮助(Esc 关闭)</span>
   </div>
@@ -1722,6 +1723,16 @@ document.addEventListener('keydown',e=>{
     case 'Home': e.preventDefault(); if(liveIdx()>0) flipTo(0,'l'); break;
     case 'End': e.preventDefault(); flipTo('live','r'); break;
     case 'g': case 'G': $('jump-bg').classList.add('open'); $('jump-input').value=''; setTimeout(()=>$('jump-input').focus(),50); break;
+    case 'r': case 'R': {
+      if(isTicTacToe()){
+        const current=S.ttt?.current, previous=current&&current.selection_index>0?current.selection_index-1:null;
+        if(previous!==null) switchTicTacToe(previous);
+        break;
+      }
+      const ts=taskList(); if(!ts.length) break;
+      const cur=curTask(); const i=(ts.findIndex(x=>tkey(x)===tkey(cur))-1+ts.length)%ts.length;
+      setCurTask(ts[i]);
+      toast('当前任务 → '+ts[i].prompt); break; }
     case 't': case 'T': {
       if(isTicTacToe()){
         const current=S.ttt?.current, next=current?tttNextIncomplete(current.selection_index):null;

@@ -6,9 +6,9 @@ arms:
     serial: 5B41532784
     id: my_awesome_follower_arm
 cameras:
-  wrist: '0x113100029930858'
-  left_rear: '0x11320000bda1376'
-  right_rear: '0x11330000bda1376'
+  wrist: '0x111100029930858'
+  left_rear: '0x11120000bda1376'
+  right_rear: '0x11130000bda1376'
 camera_controls:
   '0x11320000bda1376':
     auto_exposure: false
@@ -35,6 +35,31 @@ camera_controls:
     saturation: 64
     gain: 0
     white_balance_temperature: 4000
+  '0x111100029930858':
+    auto_exposure: false
+    auto_white_balance: true
+    absolute_exposure_time: 313
+    brightness: 0
+    contrast: 32
+    saturation: 64
+    gain: 0
+    white_balance_temperature: 4000
+  '0x11120000bda1376':
+    auto_exposure: false
+    auto_white_balance: true
+    absolute_exposure_time: 75
+    brightness: 4
+    contrast: 35
+    saturation: 64
+    white_balance_temperature: 4600
+  '0x11130000bda1376':
+    auto_exposure: false
+    auto_white_balance: true
+    absolute_exposure_time: 75
+    brightness: 6
+    contrast: 35
+    saturation: 64
+    white_balance_temperature: 4600
 record:
   fps: 30
   width: 640
